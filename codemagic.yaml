@@ -1,0 +1,27 @@
+workflows:
+  ios-workflow:
+    name: iOS Flutter Build (IPA)
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          flutter pub get
+
+      - name: Build iOS (no codesign)
+        script: |
+          flutter build ios --release --no-codesign
+
+      - name: Create IPA
+        script: |
+          mkdir -p build/ios/ipa
+          cd build/ios/iphoneos
+          mkdir Payload
+          cp -R Runner.app Payload/
+          zip -r ../ipa/horarios_escola_novo.ipa Payload
+
+    artifacts:
+      - build/ios/ipa/*.ipa
