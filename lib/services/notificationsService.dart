@@ -148,13 +148,13 @@ class NotificacoesService {
     final tzDataHora = tz.TZDateTime.from(dataHora, tz.local);
 
     await _notifications.zonedSchedule(
-      id,
-      titulo,
-      corpo,
-      tzDataHora,
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+    id,
+    titulo,
+    corpo,
+    tzDataHora,
+    details,
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+  );
   }
 
   // Cancelar notificações de uma prova

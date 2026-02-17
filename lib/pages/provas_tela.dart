@@ -4,6 +4,7 @@ import '../preferences/provasData.dart';
 import '../models/prova_model.dart';
 import '../services/notificationsService.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProvasPage extends StatefulWidget {
   const ProvasPage({super.key});
@@ -16,6 +17,20 @@ class _ProvasPageState extends State<ProvasPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  // Lista de aulas disponíveis
+  static const List<String> _aulas = [
+    '1ª aula',
+    '2ª aula',
+    '3ª aula',
+    '4ª aula',
+    '5ª aula',
+    '6ª aula',
+    '7ª aula',
+    '8ª aula',
+    '9ª aula',
+    '10ª aula',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +42,65 @@ class _ProvasPageState extends State<ProvasPage> {
   Future<void> _carregarDados() async {
     await ProvasData.carregarProvas();
     setState(() {});
+  }
+
+  // Formatar texto de compartilhamento de UMA prova
+  String _formatarProvaParaCompartilhar(Prova prova) {
+    final buffer = StringBuffer();
+    buffer.writeln('📅 *Prova dia:* ${prova.dataFormatada}');
+    buffer.writeln('📚 *Matéria:* ${prova.materia}');
+    buffer.writeln('🕐 *Aula:* ${prova.horario}');
+    if (prova.conteudo.isNotEmpty) {
+      buffer.writeln('📝 *Conteúdo:* ${prova.conteudo}');
+    }
+    return buffer.toString().trim();
+  }
+
+  // Formatar texto de compartilhamento de TODAS as provas
+  String _formatarTodasProvasParaCompartilhar() {
+    if (ProvasData.provas.isEmpty) return '';
+
+    // Ordena por data
+    final provasOrdenadas = List<Prova>.from(ProvasData.provas)
+      ..sort((a, b) => a.data.compareTo(b.data));
+
+    final buffer = StringBuffer();
+    buffer.writeln('📋 *Minhas Provas*\n');
+
+    for (final prova in provasOrdenadas) {
+      buffer.writeln('━━━━━━━━━━━━━━━━━━');
+      buffer.writeln('📅 *Prova dia:* ${prova.dataFormatada}');
+      buffer.writeln('📚 *Matéria:* ${prova.materia}');
+      buffer.writeln('🕐 *Aula:* ${prova.horario}');
+      if (prova.conteudo.isNotEmpty) {
+        buffer.writeln('📝 *Conteúdo:* ${prova.conteudo}');
+      }
+      buffer.writeln();
+    }
+
+    return buffer.toString().trim();
+  }
+
+  // Compartilhar via WhatsApp
+  Future<void> _compartilharWhatsApp(String texto) async {
+    final encoded = Uri.encodeComponent(texto);
+    final url = Uri.parse('whatsapp://send?text=$encoded');
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      // Fallback: abre wa.me (funciona mesmo sem WhatsApp instalado como app)
+      final urlWeb = Uri.parse('https://wa.me/?text=$encoded');
+      if (await canLaunchUrl(urlWeb)) {
+        await launchUrl(urlWeb, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Não foi possível abrir o WhatsApp')),
+          );
+        }
+      }
+    }
   }
 
   // Mostrar lista de todas as provas
@@ -68,16 +142,19 @@ class _ProvasPageState extends State<ProvasPage> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),
                         ),
-                      if (prova.diasAntesLembrete != null && prova.diasAntesLembrete! > 0)
+                      if (prova.diasAntesLembrete != null &&
+                          prova.diasAntesLembrete! > 0)
                         Row(
                           children: [
-                            const Icon(Icons.notifications_active, size: 12, color: Colors.deepPurple),
+                            const Icon(Icons.notifications_active,
+                                size: 12, color: Colors.deepPurple),
                             const SizedBox(width: 4),
                             Text(
-                              prova.lembretesDiarios 
-                                ? 'Lembretes diários (${prova.diasAntesLembrete} dias antes)'
-                                : 'Lembrete ${prova.diasAntesLembrete} dia(s) antes',
-                              style: const TextStyle(fontSize: 11, color: Colors.deepPurple),
+                              prova.lembretesDiarios
+                                  ? 'Lembretes diários (${prova.diasAntesLembrete} dias antes)'
+                                  : 'Lembrete ${prova.diasAntesLembrete} dia(s) antes',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.deepPurple),
                             ),
                           ],
                         ),
@@ -86,6 +163,16 @@ class _ProvasPageState extends State<ProvasPage> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Botão compartilhar WhatsApp (prova individual)
+                      IconButton(
+                        icon: const Icon(Icons.share, color: Colors.green),
+                        tooltip: 'Compartilhar no WhatsApp',
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _compartilharWhatsApp(
+                              _formatarProvaParaCompartilhar(prova));
+                        },
+                      ),
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: () {
@@ -108,6 +195,18 @@ class _ProvasPageState extends State<ProvasPage> {
           ),
         ),
         actions: [
+          // Compartilhar TODAS via WhatsApp
+          TextButton.icon(
+            icon: const Icon(Icons.share, color: Colors.green),
+            label: const Text(
+              'Compartilhar todas',
+              style: TextStyle(color: Colors.green),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _compartilharWhatsApp(_formatarTodasProvasParaCompartilhar());
+            },
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Fechar'),
@@ -120,12 +219,12 @@ class _ProvasPageState extends State<ProvasPage> {
   // Adicionar nova prova
   void _adicionarProva({DateTime? dataSelecionada}) {
     final materiaController = TextEditingController();
-    final horarioController = TextEditingController();
     final conteudoController = TextEditingController();
     DateTime dataProva = dataSelecionada ?? DateTime.now();
     Color? corSelecionada;
     int? diasAntesLembrete;
     bool lembretesDiarios = false;
+    String? aulaSelecionada; // <-- dropdown
 
     showDialog(
       context: context,
@@ -160,7 +259,8 @@ class _ProvasPageState extends State<ProvasPage> {
                       context: context,
                       initialDate: dataProva,
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                      lastDate:
+                          DateTime.now().add(const Duration(days: 365)),
                     );
                     if (data != null) {
                       setDialogState(() {
@@ -171,13 +271,26 @@ class _ProvasPageState extends State<ProvasPage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Campo Horário
-                TextField(
-                  controller: horarioController,
+                // Dropdown de Aula
+                DropdownButtonFormField<String>(
+                  value: aulaSelecionada,
                   decoration: const InputDecoration(
-                    labelText: 'Horário (ex: 14:00)',
+                    labelText: 'Aula',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.schedule),
                   ),
+                  hint: const Text('Selecione a aula'),
+                  items: _aulas
+                      .map((aula) => DropdownMenuItem(
+                            value: aula,
+                            child: Text(aula),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      aulaSelecionada = value;
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -194,12 +307,14 @@ class _ProvasPageState extends State<ProvasPage> {
                 const SizedBox(height: 16),
 
                 // Seletor de cor
-                const Text('Cor (opcional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Cor (opcional):',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
-                    _buildCorOption(null, corSelecionada, setDialogState, (cor) => corSelecionada = cor),
+                    _buildCorOption(null, corSelecionada, setDialogState,
+                        (cor) => corSelecionada = cor),
                     ...[
                       Colors.red[300]!,
                       Colors.blue[300]!,
@@ -209,7 +324,8 @@ class _ProvasPageState extends State<ProvasPage> {
                       Colors.orange[300]!,
                       Colors.pink[300]!,
                       Colors.teal[300]!,
-                    ].map((cor) => _buildCorOption(cor, corSelecionada, setDialogState, (c) => corSelecionada = c)),
+                    ].map((cor) => _buildCorOption(cor, corSelecionada,
+                        setDialogState, (c) => corSelecionada = c)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -220,20 +336,17 @@ class _ProvasPageState extends State<ProvasPage> {
                 // Configurações de Notificação
                 Row(
                   children: [
-                    const Icon(Icons.notifications_active, color: Colors.deepPurple, size: 20),
+                    const Icon(Icons.notifications_active,
+                        color: Colors.deepPurple, size: 20),
                     const SizedBox(width: 8),
                     const Text(
                       'Lembretes',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // Dias antes do lembrete
                 const Text(
                   'Começar a lembrar com antecedência:',
                   style: TextStyle(fontSize: 13),
@@ -243,17 +356,21 @@ class _ProvasPageState extends State<ProvasPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildDiasChip(null, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(1, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(2, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(3, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(5, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(7, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(null, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(1, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(2, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(3, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(5, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(7, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Lembretes diários
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Lembrete diário'),
@@ -264,7 +381,8 @@ class _ProvasPageState extends State<ProvasPage> {
                     style: const TextStyle(fontSize: 12),
                   ),
                   value: lembretesDiarios,
-                  enabled: diasAntesLembrete != null && diasAntesLembrete! > 0,
+                  enabled:
+                      diasAntesLembrete != null && diasAntesLembrete! > 0,
                   onChanged: (value) {
                     setDialogState(() {
                       lembretesDiarios = value ?? false;
@@ -283,14 +401,16 @@ class _ProvasPageState extends State<ProvasPage> {
               onPressed: () async {
                 if (materiaController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Por favor, insira a matéria')),
+                    const SnackBar(
+                        content: Text('Por favor, insira a matéria')),
                   );
                   return;
                 }
 
-                if (horarioController.text.trim().isEmpty) {
+                if (aulaSelecionada == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Por favor, insira o horário')),
+                    const SnackBar(
+                        content: Text('Por favor, selecione a aula')),
                   );
                   return;
                 }
@@ -298,7 +418,7 @@ class _ProvasPageState extends State<ProvasPage> {
                 final prova = Prova(
                   materia: materiaController.text.trim(),
                   data: dataProva,
-                  horario: horarioController.text.trim(),
+                  horario: aulaSelecionada!,
                   conteudo: conteudoController.text.trim(),
                   cor: corSelecionada,
                   diasAntesLembrete: diasAntesLembrete,
@@ -308,7 +428,6 @@ class _ProvasPageState extends State<ProvasPage> {
                 ProvasData.adicionarProva(prova);
                 await ProvasData.salvarProvas();
 
-                // Agendar notificações
                 if (diasAntesLembrete != null && diasAntesLembrete! > 0) {
                   await NotificacoesService.solicitarPermissoes();
                   await NotificacoesService.agendarNotificacoesProva(prova);
@@ -337,13 +456,18 @@ class _ProvasPageState extends State<ProvasPage> {
 
   // Editar prova existente
   void _editarProva(Prova provaOriginal) {
-    final materiaController = TextEditingController(text: provaOriginal.materia);
-    final horarioController = TextEditingController(text: provaOriginal.horario);
-    final conteudoController = TextEditingController(text: provaOriginal.conteudo);
+    final materiaController =
+        TextEditingController(text: provaOriginal.materia);
+    final conteudoController =
+        TextEditingController(text: provaOriginal.conteudo);
     DateTime dataProva = provaOriginal.data;
     Color? corSelecionada = provaOriginal.cor;
     int? diasAntesLembrete = provaOriginal.diasAntesLembrete;
     bool lembretesDiarios = provaOriginal.lembretesDiarios;
+    // Tenta encontrar a aula salva na lista; se não achar (dado antigo), usa null
+    String? aulaSelecionada = _aulas.contains(provaOriginal.horario)
+        ? provaOriginal.horario
+        : null;
 
     showDialog(
       context: context,
@@ -375,7 +499,8 @@ class _ProvasPageState extends State<ProvasPage> {
                       context: context,
                       initialDate: dataProva,
                       firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                      lastDate:
+                          DateTime.now().add(const Duration(days: 365)),
                     );
                     if (data != null) {
                       setDialogState(() {
@@ -385,14 +510,30 @@ class _ProvasPageState extends State<ProvasPage> {
                   },
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: horarioController,
+
+                // Dropdown de Aula (editar)
+                DropdownButtonFormField<String>(
+                  value: aulaSelecionada,
                   decoration: const InputDecoration(
-                    labelText: 'Horário',
+                    labelText: 'Aula',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.schedule),
                   ),
+                  hint: const Text('Selecione a aula'),
+                  items: _aulas
+                      .map((aula) => DropdownMenuItem(
+                            value: aula,
+                            child: Text(aula),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      aulaSelecionada = value;
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
+
                 TextField(
                   controller: conteudoController,
                   maxLines: 3,
@@ -402,12 +543,14 @@ class _ProvasPageState extends State<ProvasPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Cor (opcional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Cor (opcional):',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
-                    _buildCorOption(null, corSelecionada, setDialogState, (cor) => corSelecionada = cor),
+                    _buildCorOption(null, corSelecionada, setDialogState,
+                        (cor) => corSelecionada = cor),
                     ...[
                       Colors.red[300]!,
                       Colors.blue[300]!,
@@ -417,24 +560,22 @@ class _ProvasPageState extends State<ProvasPage> {
                       Colors.orange[300]!,
                       Colors.pink[300]!,
                       Colors.teal[300]!,
-                    ].map((cor) => _buildCorOption(cor, corSelecionada, setDialogState, (c) => corSelecionada = c)),
+                    ].map((cor) => _buildCorOption(cor, corSelecionada,
+                        setDialogState, (c) => corSelecionada = c)),
                   ],
                 ),
                 const SizedBox(height: 20),
                 const Divider(),
                 const SizedBox(height: 12),
-
-                // Configurações de Notificação
                 Row(
                   children: [
-                    const Icon(Icons.notifications_active, color: Colors.deepPurple, size: 20),
+                    const Icon(Icons.notifications_active,
+                        color: Colors.deepPurple, size: 20),
                     const SizedBox(width: 8),
                     const Text(
                       'Lembretes',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ],
                 ),
@@ -448,12 +589,18 @@ class _ProvasPageState extends State<ProvasPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildDiasChip(null, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(1, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(2, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(3, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(5, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
-                    _buildDiasChip(7, diasAntesLembrete, setDialogState, (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(null, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(1, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(2, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(3, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(5, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
+                    _buildDiasChip(7, diasAntesLembrete, setDialogState,
+                        (dias) => diasAntesLembrete = dias),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -467,7 +614,8 @@ class _ProvasPageState extends State<ProvasPage> {
                     style: const TextStyle(fontSize: 12),
                   ),
                   value: lembretesDiarios,
-                  enabled: diasAntesLembrete != null && diasAntesLembrete! > 0,
+                  enabled:
+                      diasAntesLembrete != null && diasAntesLembrete! > 0,
                   onChanged: (value) {
                     setDialogState(() {
                       lembretesDiarios = value ?? false;
@@ -486,22 +634,28 @@ class _ProvasPageState extends State<ProvasPage> {
               onPressed: () async {
                 if (materiaController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Por favor, insira a matéria')),
+                    const SnackBar(
+                        content: Text('Por favor, insira a matéria')),
                   );
                   return;
                 }
 
-                // Cancela notificações antigas
-                await NotificacoesService.cancelarNotificacoesProva(provaOriginal.chave);
+                if (aulaSelecionada == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Por favor, selecione a aula')),
+                  );
+                  return;
+                }
 
-                // Remove a prova antiga
+                await NotificacoesService.cancelarNotificacoesProva(
+                    provaOriginal.chave);
                 ProvasData.removerProva(provaOriginal.chave);
 
-                // Adiciona a prova atualizada
                 final provaAtualizada = Prova(
                   materia: materiaController.text.trim(),
                   data: dataProva,
-                  horario: horarioController.text.trim(),
+                  horario: aulaSelecionada!,
                   conteudo: conteudoController.text.trim(),
                   cor: corSelecionada,
                   diasAntesLembrete: diasAntesLembrete,
@@ -511,10 +665,10 @@ class _ProvasPageState extends State<ProvasPage> {
                 ProvasData.adicionarProva(provaAtualizada);
                 await ProvasData.salvarProvas();
 
-                // Agenda novas notificações
                 if (diasAntesLembrete != null && diasAntesLembrete! > 0) {
                   await NotificacoesService.solicitarPermissoes();
-                  await NotificacoesService.agendarNotificacoesProva(provaAtualizada);
+                  await NotificacoesService.agendarNotificacoesProva(
+                      provaAtualizada);
                 }
 
                 setState(() {});
@@ -532,9 +686,10 @@ class _ProvasPageState extends State<ProvasPage> {
     );
   }
 
-  // Widget para selecionar cor
-  Widget _buildCorOption(Color? cor, Color? corAtual, StateSetter setState, Function(Color?) onSelect) {
-    final selecionada = (cor == null && corAtual == null) || (cor != null && cor == corAtual);
+  Widget _buildCorOption(Color? cor, Color? corAtual, StateSetter setState,
+      Function(Color?) onSelect) {
+    final selecionada =
+        (cor == null && corAtual == null) || (cor != null && cor == corAtual);
 
     return GestureDetector(
       onTap: () => setState(() => onSelect(cor)),
@@ -544,24 +699,28 @@ class _ProvasPageState extends State<ProvasPage> {
         decoration: BoxDecoration(
           color: cor ?? Colors.white,
           border: Border.all(
-            color: selecionada ? Colors.deepPurple : Colors.grey[300]!,
+            color:
+                selecionada ? Colors.deepPurple : Colors.grey[300]!,
             width: selecionada ? 3 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: cor == null
             ? const Center(
-                child: Icon(Icons.close, size: 20, color: Colors.grey),
-              )
+                child: Icon(Icons.close, size: 20, color: Colors.grey))
             : null,
       ),
     );
   }
 
-  // Widget para selecionar dias de antecedência
-  Widget _buildDiasChip(int? dias, int? diasSelecionados, StateSetter setState, Function(int?) onSelect) {
+  Widget _buildDiasChip(int? dias, int? diasSelecionados, StateSetter setState,
+      Function(int?) onSelect) {
     final selecionado = dias == diasSelecionados;
-    final label = dias == null ? 'Sem lembrete' : dias == 1 ? '1 dia' : '$dias dias';
+    final label = dias == null
+        ? 'Sem lembrete'
+        : dias == 1
+            ? '1 dia'
+            : '$dias dias';
 
     return FilterChip(
       label: Text(label),
@@ -574,7 +733,6 @@ class _ProvasPageState extends State<ProvasPage> {
     );
   }
 
-  // Remover prova
   void _removerProva(String chave) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -596,9 +754,7 @@ class _ProvasPageState extends State<ProvasPage> {
     );
 
     if (confirmar == true) {
-      // Cancela notificações
       await NotificacoesService.cancelarNotificacoesProva(chave);
-      
       setState(() {
         ProvasData.removerProva(chave);
       });
@@ -609,13 +765,13 @@ class _ProvasPageState extends State<ProvasPage> {
     }
   }
 
-  // Limpar todas as provas
   void _limparTodasProvas() async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Limpar todas as provas?'),
-        content: const Text('Esta ação irá remover TODAS as provas cadastradas. Não é possível desfazer.'),
+        content: const Text(
+            'Esta ação irá remover TODAS as provas cadastradas. Não é possível desfazer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -631,9 +787,7 @@ class _ProvasPageState extends State<ProvasPage> {
     );
 
     if (confirmar == true) {
-      // Cancela todas as notificações
       await NotificacoesService.cancelarTodasNotificacoes();
-      
       setState(() {
         ProvasData.limparTodasProvas();
       });
@@ -670,7 +824,6 @@ class _ProvasPageState extends State<ProvasPage> {
       ),
       body: Column(
         children: [
-          // Calendário
           TableCalendar(
             firstDay: DateTime.now().subtract(const Duration(days: 365)),
             lastDay: DateTime.now().add(const Duration(days: 365)),
@@ -690,11 +843,12 @@ class _ProvasPageState extends State<ProvasPage> {
             ),
             calendarStyle: CalendarStyle(
               markersMaxCount: 3,
-              markerDecoration: BoxDecoration(
+              markerDecoration: const BoxDecoration(
                 color: Colors.deepPurple,
                 shape: BoxShape.circle,
               ),
-              markerMargin: const EdgeInsets.symmetric(horizontal: 1),
+              markerMargin:
+                  const EdgeInsets.symmetric(horizontal: 1),
               todayDecoration: BoxDecoration(
                 color: Colors.deepPurple.withOpacity(0.5),
                 shape: BoxShape.circle,
@@ -707,7 +861,6 @@ class _ProvasPageState extends State<ProvasPage> {
             calendarBuilders: CalendarBuilders(
               markerBuilder: (context, date, events) {
                 if (events.isEmpty) return null;
-                
                 return Positioned(
                   bottom: 1,
                   child: Row(
@@ -715,7 +868,8 @@ class _ProvasPageState extends State<ProvasPage> {
                     children: List.generate(
                       events.length > 3 ? 3 : events.length,
                       (index) => Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 1),
                         width: 6,
                         height: 6,
                         decoration: const BoxDecoration(
@@ -733,7 +887,7 @@ class _ProvasPageState extends State<ProvasPage> {
             },
           ),
           const Divider(height: 1),
-          
+
           // Lista de provas do dia selecionado
           Expanded(
             child: provasDoDia.isEmpty
@@ -741,25 +895,21 @@ class _ProvasPageState extends State<ProvasPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.event_note,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
+                        Icon(Icons.event_note,
+                            size: 64, color: Colors.grey[400]),
                         const SizedBox(height: 16),
                         Text(
                           _selectedDay == null
                               ? 'Selecione uma data no calendário'
                               : 'Nenhuma prova neste dia',
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
+                              fontSize: 16, color: Colors.grey[600]),
                         ),
                         if (_selectedDay != null) ...[
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
-                            onPressed: () => _adicionarProva(dataSelecionada: _selectedDay),
+                            onPressed: () => _adicionarProva(
+                                dataSelecionada: _selectedDay),
                             icon: const Icon(Icons.add),
                             label: const Text('Adicionar prova'),
                             style: ElevatedButton.styleFrom(
@@ -801,19 +951,29 @@ class _ProvasPageState extends State<ProvasPage> {
                                         ),
                                       ),
                                     ),
+                                    // Botão compartilhar WhatsApp (card do dia)
+                                    IconButton(
+                                      icon: const Icon(Icons.share,
+                                          color: Colors.green, size: 20),
+                                      tooltip: 'Compartilhar no WhatsApp',
+                                      onPressed: () =>
+                                          _compartilharWhatsApp(
+                                              _formatarProvaParaCompartilhar(
+                                                  prova)),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
-                                    const Icon(Icons.access_time, size: 16, color: Colors.black54),
+                                    const Icon(Icons.class_,
+                                        size: 16, color: Colors.black54),
                                     const SizedBox(width: 4),
                                     Text(
                                       prova.horario,
                                       style: const TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.black54,
-                                      ),
+                                          fontSize: 14,
+                                          color: Colors.black54),
                                     ),
                                   ],
                                 ),
@@ -822,31 +982,31 @@ class _ProvasPageState extends State<ProvasPage> {
                                   const Text(
                                     'Conteúdo:',
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black54,
-                                    ),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black54),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    prova.conteudo,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
+                                  Text(prova.conteudo,
+                                      style: const TextStyle(fontSize: 13)),
                                 ],
-                                if (prova.diasAntesLembrete != null && prova.diasAntesLembrete! > 0) ...[
+                                if (prova.diasAntesLembrete != null &&
+                                    prova.diasAntesLembrete! > 0) ...[
                                   const SizedBox(height: 12),
                                   Row(
                                     children: [
-                                      const Icon(Icons.notifications_active, size: 14, color: Colors.deepPurple),
+                                      const Icon(
+                                          Icons.notifications_active,
+                                          size: 14,
+                                          color: Colors.deepPurple),
                                       const SizedBox(width: 4),
                                       Text(
-                                        prova.lembretesDiarios 
-                                          ? 'Lembretes diários (${prova.diasAntesLembrete} dias antes)'
-                                          : 'Lembrete ${prova.diasAntesLembrete} dia(s) antes',
+                                        prova.lembretesDiarios
+                                            ? 'Lembretes diários (${prova.diasAntesLembrete} dias antes)'
+                                            : 'Lembrete ${prova.diasAntesLembrete} dia(s) antes',
                                         style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.deepPurple,
-                                        ),
+                                            fontSize: 12,
+                                            color: Colors.deepPurple),
                                       ),
                                     ],
                                   ),

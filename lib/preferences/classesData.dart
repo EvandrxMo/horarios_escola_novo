@@ -19,7 +19,6 @@ class ClassesData {
   static const List<String> horarios = [
     '7:10',
     '8:10',
-    '8:40',
     '9:00',
     'INTERVALO',
     '10:10',
