@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/mood_model.dart';
+import '../services/backup_service.dart';
 
 class MoodData {
   static const String _keyMoods = 'moods';
@@ -70,15 +71,18 @@ class MoodData {
     );
     
     // Salva no SharedPreferences
-    await _salvarNoStorage();
+    await salvarRegistros();
   }
 
-  static Future<void> _salvarNoStorage() async {
+  static Future<void> salvarRegistros() async {
     final prefs = await SharedPreferences.getInstance();
-    final moodsJson = json.encode(
-      _registros.map((r) => r.toJson()).toList(),
+    final registrosJson = jsonEncode(
+      _registros.map((registro) => registro.toJson()).toList(),
     );
-    await prefs.setString(_keyMoods, moodsJson);
+    await prefs.setString(_keyMoods, registrosJson);
+    
+    // Criar backup automático após salvar registros
+    await BackupService.criarBackup();
   }
 
   // Obtém o mood de hoje

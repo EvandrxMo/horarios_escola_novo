@@ -4,10 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/primeira_tela.dart';
 import 'pages/home_tela.dart';
 import 'preferences/appData.dart';
+import 'services/backup_service.dart';
+import 'widgets/backup_restore_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppData.carregarDados();
+
+  try {
+    await AppData.carregarDados();
+  } catch (e, s) {
+    debugPrint('Erro ao carregar AppData: $e\n$s');
+  }
+
   runApp(const MeuApp());
 }
 
@@ -114,26 +122,39 @@ class VerificadorPrimeiroAcesso extends StatefulWidget {
 
 class _VerificadorPrimeiroAcessoState extends State<VerificadorPrimeiroAcesso> {
   bool? _primeiroAcesso;
+  bool? _existeBackup;
 
   @override
   void initState() {
     super.initState();
     _verificarPrimeiroAcesso();
+    // Comentado temporariamente para evitar crash na inicialização
+    // _iniciarJumpscare();
   }
 
   Future<void> _verificarPrimeiroAcesso() async {
-    final prefs = await SharedPreferences.getInstance();
-    final nome = prefs.getString('nome');
-    
-    setState(() {
-      _primeiroAcesso = (nome == null || nome.isEmpty);
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nome = prefs.getString('nome');
+      final existeBackup = await BackupService.existeBackup();
+
+      setState(() {
+        _primeiroAcesso = (nome == null || nome.isEmpty);
+        _existeBackup = existeBackup;
+      });
+    } catch (e, s) {
+      debugPrint('Erro em _verificarPrimeiroAcesso: $e\n$s');
+      setState(() {
+        _primeiroAcesso = true; // assume primeiro acesso em caso de problema
+        _existeBackup = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     // Enquanto verifica, mostra loading
-    if (_primeiroAcesso == null) {
+    if (_primeiroAcesso == null || _existeBackup == null) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -141,8 +162,37 @@ class _VerificadorPrimeiroAcessoState extends State<VerificadorPrimeiroAcesso> {
       );
     }
 
+    // Se for primeiro acesso E existir backup, mostra diálogo de restauração
+    if (_primeiroAcesso! && _existeBackup!) {
+      return FutureBuilder<bool>(
+        future: _mostrarDialogoRestauracao(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          
+          // Se restaurou com sucesso, vai para home, senão vai para cadastro
+          return snapshot.data == true ? const HomePage() : const PrimeiraTela();
+        },
+      );
+    }
+
     // Se for primeiro acesso, mostra a tela de cadastro
     // Senão, vai direto para a home
     return _primeiroAcesso! ? const PrimeiraTela() : const HomePage();
+  }
+
+  Future<bool> _mostrarDialogoRestauracao() async {
+    final resultado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // Não fecha clicando fora
+      builder: (context) => const BackupRestoreDialog(),
+    );
+    
+    return resultado ?? false;
   }
 }

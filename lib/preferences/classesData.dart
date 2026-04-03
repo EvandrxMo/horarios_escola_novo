@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/aula_model.dart';
+import '../services/backup_service.dart';
 
 class ClassesData {
   // Mapa de aulas: chave = 'DiaSemana-Horario', valor = Aula
@@ -37,6 +38,13 @@ class ClassesData {
     aulas.remove(chave);
   }
 
+  // Obter lista de matérias únicas
+  static List<String> obterMateriasUnicas() {
+    final materias = aulas.values.map((aula) => aula.materia).toSet().toList();
+    materias.sort(); // Ordena alfabeticamente
+    return materias;
+  }
+
   // Limpar todas as aulas
   static void limparTodasAulas() {
     aulas.clear();
@@ -54,6 +62,15 @@ class ClassesData {
     return aulas.containsKey(chave);
   }
 
+  // Obter aulas de um dia específico
+  static List<Aula> obterAulasDoDia(String diaSemana) {
+    return aulas.entries
+        .where((entry) => entry.key.startsWith('$diaSemana-'))
+        .map((entry) => entry.value)
+        .toList()
+      ..sort((a, b) => a.horario.compareTo(b.horario));
+  }
+
   // Salvar aulas no SharedPreferences
   static Future<void> salvarAulas() async {
     final prefs = await SharedPreferences.getInstance();
@@ -61,6 +78,8 @@ class ClassesData {
       aulas.values.map((aula) => aula.toJson()).toList(),
     );
     await prefs.setString('aulas', aulasJson);
+    // Criar backup automático após salvar aulas
+    await BackupService.criarBackup();
   }
 
   // Carregar aulas do SharedPreferences

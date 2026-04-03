@@ -6,16 +6,19 @@ import '../preferences/classesData.dart';
 import '../preferences/provasData.dart';
 import '../preferences/moodData.dart';
 import '../services/sptransService.dart';
+import '../services/jumpscare_service.dart';
 import '../models/onibus_model.dart';
 import '../widgets/aniversario.dart';
 import '../widgets/brilho_noturno.dart';
 import '../widgets/mood_detector_dialog.dart';
-import 'classes_tela.dart';
+import 'classes_modern_tela.dart' as classes;
 import 'provas_tela.dart';
 import 'onibus_detalhes_tela.dart';
 import 'tarefas_tela.dart';
 import 'notes_tela.dart';
 import 'mood_tracker_tela.dart';
+import 'foco_page.dart';
+import 'foco_relatorio_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -29,20 +32,22 @@ class _HomePageState extends State<HomePage> {
   
   final List<Widget> _paginas = [
     const HomeContent(),
-    const ClassesPage(),
+    const classes.ClassesModernPage(),
     const ProvasPage(),
     const TarefasPage(),
     const NotasPage(),
     const MoodTrackerPage(),
+    const FocoRelatorioPage(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _paginas[_paginaAtual],
+      body: _paginaAtual < _paginas.length ? _paginas[_paginaAtual] : _paginas[0],
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _paginaAtual,
+        currentIndex: _paginaAtual < _paginas.length ? _paginaAtual : 0,
         onTap: (index) {
+          if (index < 0 || index >= _paginas.length) return;
           setState(() {
             _paginaAtual = index;
           });
@@ -74,6 +79,10 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.mood),
             label: 'Humor',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Relatório',
+          ),
         ],
       ),
     );
@@ -100,6 +109,13 @@ class _HomeContentState extends State<HomeContent> {
   static const String _paradaVolta = '706304';
   static const String _linha = '917H-10';
 
+  String _obterSaudacao() {
+    final hora = DateTime.now().hour;
+    if (hora < 12) return 'Bom dia,';
+    if (hora < 18) return 'Boa tarde,';
+    return 'Boa noite,';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -107,10 +123,16 @@ class _HomeContentState extends State<HomeContent> {
     _buscarProximoOnibus();
     _verificarAniversario();
     _verificarMoodDoDia();
+    _iniciarJumpscare();
     // Atualiza a previsão do ônibus a cada 30 segundos
     _timerOnibus = Timer.periodic(const Duration(seconds: 30), (timer) {
       _buscarProximoOnibus();
     });
+  }
+
+  Future<void> _iniciarJumpscare() async {
+    await JumpscareService.checkLastTriggerDate();
+    JumpscareService.startJumpscareTimer(context);
   }
 
   @override
@@ -230,7 +252,7 @@ class _HomeContentState extends State<HomeContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Widget de brilho
+            // Widget de jumpscare do Rasputin
             const BrilhoNoturnoWidget(),
             
             // Header com foto e saudação
@@ -764,13 +786,18 @@ class _HomeContentState extends State<HomeContent> {
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const FocoPage()),
+          );
+        },
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.timer),
+        label: const Text('Modo Foco'),
+        tooltip: 'Iniciar Modo Foco',
+      ),
     );
-  }
-
-  String _obterSaudacao() {
-    final hora = DateTime.now().hour;
-    if (hora < 12) return 'Bom dia,';
-    if (hora < 18) return 'Boa tarde,';
-    return 'Boa noite,';
   }
 }

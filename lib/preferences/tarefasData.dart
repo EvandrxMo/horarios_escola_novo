@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/tarefa_model.dart';
+import '../services/backup_service.dart';
 
 class TarefasData {
   static List<Tarefa> tarefas = [];
@@ -84,13 +85,16 @@ class TarefasData {
     return agrupadas;
   }
 
-  // Salvar tarefas
+  // Salvar tarefas no SharedPreferences
   static Future<void> salvarTarefas() async {
     final prefs = await SharedPreferences.getInstance();
     final tarefasJson = jsonEncode(
       tarefas.map((tarefa) => tarefa.toJson()).toList(),
     );
     await prefs.setString('tarefas', tarefasJson);
+    
+    // Criar backup automático após salvar tarefas
+    await BackupService.criarBackup();
   }
 
   // Carregar tarefas

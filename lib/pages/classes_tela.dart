@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../preferences/classesData.dart';
 import '../preferences/appData.dart';
 import '../models/aula_model.dart';
@@ -451,38 +452,6 @@ class _ClassesPageState extends State<ClassesPage> {
     }
   }
 
-  // Limpar toda a grade
-  void _limparGrade() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Limpar grade completa?'),
-        content: const Text('Esta ação irá remover TODAS as aulas cadastradas. Não é possível desfazer.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Limpar tudo'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      setState(() {
-        ClassesData.limparTodasAulas();
-      });
-      await ClassesData.salvarAulas();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Grade limpa')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final diaAtual = _obterDiaAtual();
@@ -492,41 +461,32 @@ class _ClassesPageState extends State<ClassesPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Horários'),
+        title: const Text('Aulas'),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         actions: [
-          // NOVO: Lista de aulas
+          // Botão para alternar visualização
+          IconButton(
+            icon: Icon(
+              AppData.visualizacaoSemanal ? Icons.view_week : Icons.view_day,
+            ),
+            onPressed: _alternarVisualizacao,
+            tooltip: AppData.visualizacaoSemanal 
+                ? 'Ver por dia' 
+                : 'Ver semana',
+          ),
+          // Botão para mostrar lista de todas as aulas
           IconButton(
             icon: const Icon(Icons.list),
             onPressed: _mostrarListaAulas,
             tooltip: 'Ver todas as aulas',
           ),
-          // Toggle visualização
-          IconButton(
-            icon: Icon(AppData.visualizacaoSemanal ? Icons.view_day : Icons.view_week),
-            onPressed: _alternarVisualizacao,
-            tooltip: AppData.visualizacaoSemanal ? 'Ver só hoje' : 'Ver semana',
-          ),
-          // Limpar grade
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _limparGrade,
-            tooltip: 'Limpar grade',
-          ),
         ],
       ),
-      // ALTERADO: Condicional para vista de um dia ocupar tela toda
-      body: AppData.visualizacaoSemanal 
-        ? SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              child: _buildDataTable(diasParaMostrar),
-            ),
-          )
-        : SingleChildScrollView(
-            child: _buildDataTable(diasParaMostrar),
-          ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: _buildDataTable(diasParaMostrar),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _adicionarNovaAula,
         backgroundColor: Colors.deepPurple,

@@ -24,14 +24,26 @@ dependencies:
   path: ^1.8.3
   flutter_local_notifications: ^19.0.0
   fl_chart: ^0.66.0
-  url_launcher: ^6.2.5
+  pdf: ^3.11.0
+  printing: ^5.11.0
+  open_file: ^3.2.1
+  provider: ^6.1.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/sounds/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/icon.png"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/images/icon.png"

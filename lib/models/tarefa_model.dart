@@ -44,6 +44,7 @@ class Tarefa {
   final String nome;
   final DateTime? data;
   final PrioridadeTarefa prioridade;
+  final String? materia;
   bool concluida;
 
   Tarefa({
@@ -51,6 +52,7 @@ class Tarefa {
     required this.nome,
     this.data,
     required this.prioridade,
+    this.materia,
     this.concluida = false,
   });
 
@@ -60,6 +62,7 @@ class Tarefa {
       'nome': nome,
       'data': data?.toIso8601String(),
       'prioridade': prioridade.index,
+      'materia': materia,
       'concluida': concluida,
     };
   }
@@ -70,6 +73,7 @@ class Tarefa {
       nome: json['nome'] as String,
       data: json['data'] != null ? DateTime.parse(json['data'] as String) : null,
       prioridade: PrioridadeTarefa.values[json['prioridade'] as int],
+      materia: json['materia'] as String?,
       concluida: json['concluida'] as bool? ?? false,
     );
   }
@@ -89,6 +93,7 @@ class Tarefa {
     String? nome,
     DateTime? data,
     PrioridadeTarefa? prioridade,
+    String? materia,
     bool? concluida,
   }) {
     return Tarefa(
@@ -96,6 +101,7 @@ class Tarefa {
       nome: nome ?? this.nome,
       data: data ?? this.data,
       prioridade: prioridade ?? this.prioridade,
+      materia: materia ?? this.materia,
       concluida: concluida ?? this.concluida,
     );
   }

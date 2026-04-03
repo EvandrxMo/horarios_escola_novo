@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/backup_service.dart';
 
 class AppData {
   // ======================
@@ -54,6 +55,9 @@ class AppData {
         dataNascimento!.toIso8601String(),
       );
     }
+
+    // Criar backup automático após salvar dados
+    await BackupService.criarBackup();
   }
 
   // ======================

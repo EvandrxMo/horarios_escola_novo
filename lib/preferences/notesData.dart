@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
 import '../models/notes_model.dart';
+import '../services/backup_service.dart';
 
 class NotasData {
   // Lista de todas as notas
@@ -66,6 +67,9 @@ class NotasData {
       notas.map((nota) => nota.toJson()).toList(),
     );
     await prefs.setString('notas', notasJson);
+    
+    // Criar backup automático após salvar notas
+    await BackupService.criarBackup();
   }
 
   // Carregar notas do SharedPreferences

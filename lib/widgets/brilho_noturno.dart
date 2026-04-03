@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:screen_brightness/screen_brightness.dart';
+import 'dart:math';
 
 class BrilhoNoturnoWidget extends StatefulWidget {
   const BrilhoNoturnoWidget({super.key});
@@ -8,15 +9,56 @@ class BrilhoNoturnoWidget extends StatefulWidget {
   State<BrilhoNoturnoWidget> createState() => _BrilhoNoturnoWidgetState();
 }
 
-class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget> {
+class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget>
+    with TickerProviderStateMixin {
   double _brilhoAtual = 0.5;
   bool _mostrarAviso = false;
   bool _avisoFoiFechado = false;
+  bool _jumpscarePronto = false;
+  late AnimationController _shakeController;
+  late AnimationController _flashController;
 
   @override
   void initState() {
     super.initState();
-    _verificarBrilho();
+    
+    // Animações para jumpscare
+    _shakeController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    
+    _flashController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+
+    // JUMPSCARE: Aparece entre 7-10 segundos após abrir o app
+    final delaySegundos = 7 + Random().nextInt(4); // 7 a 10 segundos
+    Future.delayed(Duration(seconds: delaySegundos), () {
+      if (mounted) {
+        _verificarBrilhoParaJumpscare();
+      }
+    });
+
+    // TESTE: Verifica a cada 4 minutos
+    Future.delayed(const Duration(minutes: 4), () {
+      if (mounted) {
+        _verificarBrilho();
+      }
+    });
+  }
+
+  Future<void> _verificarBrilhoParaJumpscare() async {
+    try {
+      final brilho = await ScreenBrightness().current;
+      setState(() {
+        _brilhoAtual = brilho;
+        _verificarSeDeveMostrarJumpscare();
+      });
+    } catch (e) {
+      // Se der erro ao pegar o brilho, não faz nada
+    }
   }
 
   Future<void> _verificarBrilho() async {
@@ -24,21 +66,21 @@ class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget> {
       final brilho = await ScreenBrightness().current;
       setState(() {
         _brilhoAtual = brilho;
-        _verificarSeDeveAvisar();
+        _verificarSeDeveMostrarJumpscare();
       });
     } catch (e) {
       // Se der erro ao pegar o brilho, não faz nada
     }
 
-    // Verifica a cada 10 segundos
-    Future.delayed(const Duration(seconds: 10), () {
+    // Continua verificando a cada 4 minutos
+    Future.delayed(const Duration(minutes: 4), () {
       if (mounted) {
         _verificarBrilho();
       }
     });
   }
 
-  void _verificarSeDeveAvisar() {
+  void _verificarSeDeveMostrarJumpscare() {
     final agora = DateTime.now();
     final hora = agora.hour;
     
@@ -48,8 +90,35 @@ class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget> {
     // Considera brilho alto acima de 60%
     final brilhoAlto = _brilhoAtual > 0.6;
     
+    if (eNoite && brilhoAlto && !_avisoFoiFechado && !_jumpscarePronto) {
+      _mostrarJumpscare();
+    }
+  }
+
+  Future<void> _mostrarJumpscare() async {
     setState(() {
-      _mostrarAviso = eNoite && brilhoAlto && !_avisoFoiFechado;
+      _jumpscarePronto = true;
+    });
+
+    // Inicia animações do jumpscare
+    _shakeController.forward();
+    _flashController.forward();
+
+    // Mostra o diálogo após o efeito
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _mostrarAviso = true;
+        });
+      }
+    });
+
+    // Para as animações depois
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _shakeController.reverse();
+        _flashController.reverse();
+      }
     });
   }
 
@@ -59,6 +128,7 @@ class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget> {
       setState(() {
         _brilhoAtual = 0.3;
         _mostrarAviso = false;
+        _avisoFoiFechado = true;
       });
       
       if (mounted) {
@@ -83,147 +153,204 @@ class _BrilhoNoturnoWidgetState extends State<BrilhoNoturnoWidget> {
   }
 
   @override
+  void dispose() {
+    _shakeController.dispose();
+    _flashController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!_mostrarAviso) {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.orange.shade800,
-            Colors.red.shade700,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+    return AnimatedBuilder(
+      animation: Listenable.merge([_shakeController, _flashController]),
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(
+            _shakeController.value * 10 * (Random().nextDouble() - 0.5),
+            _shakeController.value * 10 * (Random().nextDouble() - 0.5),
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Botão fechar
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                onPressed: _fecharAviso,
-                icon: const Icon(Icons.close, color: Colors.white),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-          
-          // Imagem Sury sem fundo - SEM CÍRCULO
-          Image.asset(
-            'assets/images/sury.png',
-            width: 90,
-            height: 90,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 12),
-          
-          // Título
-          const Text(
-            'Opa! Tá muito claro aí!',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          
-          // Mensagem
-          Text(
-            'São ${DateTime.now().hour}h e o brilho da sua tela está em ${(_brilhoAtual * 100).toInt()}%.\n\nIsso pode prejudicar sua visão! 👀',
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.white,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          
-          // Informação extra
-          Container(
-            padding: const EdgeInsets.all(12),
+          child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: _flashController.value > 0.5 
+                  ? Colors.red.withOpacity(0.8) 
+                  : Colors.transparent,
             ),
-            child: const Row(
-              children: [
-                Icon(Icons.lightbulb_outline, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Exposição à luz azul à noite pode atrapalhar seu sono',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white,
-                      fontStyle: FontStyle.italic,
-                    ),
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.zero,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.red.shade900,
+                      Colors.black,
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.8),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.6),
+                      blurRadius: 30,
+                      spreadRadius: 5,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // Botões
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _fecharAviso,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 2),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Botão fechar
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          onPressed: _fecharAviso,
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
-                  ),
-                  child: const Text(
-                    'Ignorar',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                    
+                    // Imagem Rasputin - JUMPSCARE
+                    Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(75),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.8),
+                          width: 4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.8),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(75),
+                        child: Image.asset(
+                          'assets/images/rasputin.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Título de alerta
+                    const Text(
+                      '🚨 LUZ ACIMA DO IDEAL! 🚨',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Mensagem
+                    Text(
+                      'São ${DateTime.now().hour}h e o brilho está em ${(_brilhoAtual * 100).toInt()}%!\n\nISSO VAI FERRAR SEUS OLHOS! 👀',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Aviso de saúde
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning, color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Luz azul à noite destrói seu sono e sua visão!',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Botões
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _fecharAviso,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white, width: 2),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'IGNORAR RISCO',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _reduzirBrilho,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'SALVAR OLHOS (30%)',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _reduzirBrilho,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.red.shade700,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Ajustar (30%)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

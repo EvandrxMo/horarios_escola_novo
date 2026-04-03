@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/prova_model.dart';
+import '../services/backup_service.dart';
 
 class ProvasData {
   // Lista de todas as provas
@@ -71,6 +72,9 @@ class ProvasData {
       provas.map((prova) => prova.toJson()).toList(),
     );
     await prefs.setString('provas', provasJson);
+    
+    // Criar backup automático após salvar provas
+    await BackupService.criarBackup();
   }
 
   // Carregar provas do SharedPreferences

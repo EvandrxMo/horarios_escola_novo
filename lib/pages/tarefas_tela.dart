@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../preferences/tarefasData.dart';
+import '../preferences/classesData.dart';
 import '../models/tarefa_model.dart';
+import '../widgets/positive_feedback_dialog.dart';
 
 class TarefasPage extends StatefulWidget {
   const TarefasPage({super.key});
@@ -27,6 +29,7 @@ class _TarefasPageState extends State<TarefasPage> {
     final nomeController = TextEditingController();
     DateTime? dataSelecionada;
     PrioridadeTarefa prioridadeSelecionada = PrioridadeTarefa.media;
+    String? materiaSelecionada;
 
     showDialog(
       context: context,
@@ -99,6 +102,38 @@ class _TarefasPageState extends State<TarefasPage> {
                 ),
                 const SizedBox(height: 16),
 
+                // Matéria (opcional)
+                const Text(
+                  'Matéria (opcional):',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: materiaSelecionada,
+                  decoration: const InputDecoration(
+                    labelText: 'Selecione uma matéria',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('OUTROS'),
+                    ),
+                    ...ClassesData.obterMateriasUnicas().map((materia) {
+                      return DropdownMenuItem(
+                        value: materia,
+                        child: Text(materia),
+                      );
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      materiaSelecionada = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+
                 // Prioridade
                 const Text(
                   'Prioridade:',
@@ -150,6 +185,7 @@ class _TarefasPageState extends State<TarefasPage> {
                   nome: nomeController.text.trim(),
                   data: dataSelecionada,
                   prioridade: prioridadeSelecionada,
+                  materia: materiaSelecionada,
                 );
 
                 TarefasData.adicionarTarefa(tarefa);
@@ -398,6 +434,11 @@ class _TarefasPageState extends State<TarefasPage> {
             onPressed: _limparConcluidas,
             tooltip: 'Limpar concluídas',
           ),
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.green),
+            onPressed: _compartilharTodasTarefas,
+            tooltip: 'Compartilhar todas as tarefas',
+          ),
         ],
       ),
       body: TarefasData.tarefas.isEmpty
@@ -543,10 +584,17 @@ class _TarefasPageState extends State<TarefasPage> {
         leading: Checkbox(
           value: tarefa.concluida,
           onChanged: (value) async {
+            final eraPendente = !tarefa.concluida;
+            
             setState(() {
               TarefasData.toggleConclusao(tarefa.id);
             });
             await TarefasData.salvarTarefas();
+            
+            // Se acabou de concluir uma tarefa, mostrar feedback positivo
+            if (eraPendente && value == true) {
+              showPositiveFeedback(context);
+            }
           },
         ),
         title: Text(
@@ -581,6 +629,12 @@ class _TarefasPageState extends State<TarefasPage> {
               onPressed: () => _editarTarefa(tarefa),
               color: Colors.blue,
             ),
+            // Botão compartilhar WhatsApp
+            IconButton(
+              icon: const Icon(Icons.share, size: 20, color: Colors.green),
+              tooltip: 'Compartilhar no WhatsApp',
+              onPressed: () => _compartilharWhatsApp(_formatarTarefaParaCompartilhar(tarefa)),
+            ),
             // Botão remover
             IconButton(
               icon: const Icon(Icons.delete, size: 20),
@@ -590,6 +644,64 @@ class _TarefasPageState extends State<TarefasPage> {
           ],
         ),
       ),
+    );
+  }
+
+  // Formatar texto de compartilhamento de UMA tarefa
+  String _formatarTarefaParaCompartilhar(Tarefa tarefa) {
+    final buffer = StringBuffer();
+    buffer.writeln('📋 *Tarefa:* ${tarefa.nome}');
+    
+    if (tarefa.data != null) {
+      buffer.writeln('📅 *Data:* ${tarefa.dataFormatada}');
+    }
+    
+    buffer.writeln('🎯 *Prioridade:* ${tarefa.prioridade.nome}');
+    buffer.writeln('✅ *Status:* ${tarefa.concluida ? "Concluída" : "Pendente"}');
+    
+    return buffer.toString().trim();
+  }
+
+  // Formatar texto de compartilhamento de TODAS as tarefas
+  String _formatarTodasTarefasParaCompartilhar() {
+    if (TarefasData.tarefas.isEmpty) return '';
+
+    final buffer = StringBuffer();
+    buffer.writeln('📋 *Minhas Tarefas:*\n');
+    
+    // Agrupa por status
+    final pendentes = TarefasData.tarefas.where((t) => !t.concluida).toList();
+    final concluidas = TarefasData.tarefas.where((t) => t.concluida).toList();
+    
+    if (pendentes.isNotEmpty) {
+      buffer.writeln('\n🔴 *Pendentes (${pendentes.length})*');
+      for (var tarefa in pendentes) {
+        buffer.writeln('• ${tarefa.nome}${tarefa.data != null ? ' (${tarefa.dataFormatada})' : ''}');
+      }
+    }
+    
+    if (concluidas.isNotEmpty) {
+      buffer.writeln('\n✅ *Concluídas (${concluidas.length})*');
+      for (var tarefa in concluidas) {
+        buffer.writeln('• ${tarefa.nome}${tarefa.data != null ? ' (${tarefa.dataFormatada})' : ''}');
+      }
+    }
+    
+    return buffer.toString().trim();
+  }
+
+  // Compartilhar todas as tarefas
+  void _compartilharTodasTarefas() {
+    final texto = _formatarTodasTarefasParaCompartilhar();
+    if (texto.isNotEmpty) {
+      _compartilharWhatsApp(texto);
+    }
+  }
+
+  // Compartilhar via WhatsApp - removido
+  Future<void> _compartilharWhatsApp(String texto) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Compartilhamento removido temporariamente')),
     );
   }
 }

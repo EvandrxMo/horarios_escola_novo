@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../preferences/provasData.dart';
+import '../preferences/classesData.dart';
 import '../models/prova_model.dart';
 import '../services/notificationsService.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ProvasPage extends StatefulWidget {
   const ProvasPage({super.key});
@@ -81,26 +81,11 @@ class _ProvasPageState extends State<ProvasPage> {
     return buffer.toString().trim();
   }
 
-  // Compartilhar via WhatsApp
+  // Compartilhar via WhatsApp - removido
   Future<void> _compartilharWhatsApp(String texto) async {
-    final encoded = Uri.encodeComponent(texto);
-    final url = Uri.parse('whatsapp://send?text=$encoded');
-
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    } else {
-      // Fallback: abre wa.me (funciona mesmo sem WhatsApp instalado como app)
-      final urlWeb = Uri.parse('https://wa.me/?text=$encoded');
-      if (await canLaunchUrl(urlWeb)) {
-        await launchUrl(urlWeb, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Não foi possível abrir o WhatsApp')),
-          );
-        }
-      }
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Compartilhamento removido temporariamente')),
+    );
   }
 
   // Mostrar lista de todas as provas
@@ -218,13 +203,13 @@ class _ProvasPageState extends State<ProvasPage> {
 
   // Adicionar nova prova
   void _adicionarProva({DateTime? dataSelecionada}) {
-    final materiaController = TextEditingController();
     final conteudoController = TextEditingController();
     DateTime dataProva = dataSelecionada ?? DateTime.now();
     Color? corSelecionada;
     int? diasAntesLembrete;
     bool lembretesDiarios = false;
-    String? aulaSelecionada; // <-- dropdown
+    String? materiaSelecionada; // <-- dropdown de matéria
+    String? aulaSelecionada; // <-- dropdown de aula
 
     showDialog(
       context: context,
@@ -237,12 +222,29 @@ class _ProvasPageState extends State<ProvasPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Campo Matéria
-                TextField(
-                  controller: materiaController,
+                DropdownButtonFormField<String>(
+                  value: materiaSelecionada,
                   decoration: const InputDecoration(
                     labelText: 'Matéria',
                     border: OutlineInputBorder(),
                   ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'SIMULADO',
+                      child: Text('SIMULADO'),
+                    ),
+                    ...ClassesData.obterMateriasUnicas().map((materia) {
+                      return DropdownMenuItem(
+                        value: materia,
+                        child: Text(materia),
+                      );
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      materiaSelecionada = value;
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -399,10 +401,10 @@ class _ProvasPageState extends State<ProvasPage> {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (materiaController.text.trim().isEmpty) {
+                if (materiaSelecionada == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Por favor, insira a matéria')),
+                        content: Text('Por favor, selecione a matéria')),
                   );
                   return;
                 }
@@ -416,7 +418,7 @@ class _ProvasPageState extends State<ProvasPage> {
                 }
 
                 final prova = Prova(
-                  materia: materiaController.text.trim(),
+                  materia: materiaSelecionada!,
                   data: dataProva,
                   horario: aulaSelecionada!,
                   conteudo: conteudoController.text.trim(),

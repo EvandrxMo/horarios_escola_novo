@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../models/prova_model.dart';
@@ -29,7 +30,15 @@ class NotificacoesService {
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(initSettings);
+    await _notifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) async {
+        final payload = details.payload;
+        if (payload != null && payload.isNotEmpty) {
+          await OpenFile.open(payload);
+        }
+      },
+    );
     _inicializado = true;
   }
 
@@ -187,6 +196,35 @@ class NotificacoesService {
     } else {
       return 'Faltam $diasFaltando dias para a prova de $materia. Prepare-se! 📖';
     }
+  }
+
+  // Mostrar notificação de download concluído e abrir arquivo no clique
+  static Future<void> mostrarNotificacaoDownload(String caminhoArquivo) async {
+    if (!_inicializado) await inicializar();
+
+    const androidDetails = AndroidNotificationDetails(
+      'download_channel',
+      'Download',
+      channelDescription: 'Notificações de relatórios exportados',
+      importance: Importance.high,
+      priority: Priority.high,
+      ticker: 'download concluído',
+    );
+
+    const iosDetails = DarwinNotificationDetails();
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      1001,
+      'Exportação concluída',
+      'Toque para abrir o arquivo PDF',
+      details,
+      payload: caminhoArquivo,
+    );
   }
 
   // Mostrar notificação imediata (para testes)
