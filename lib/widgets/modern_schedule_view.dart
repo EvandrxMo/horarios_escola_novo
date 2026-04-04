@@ -115,6 +115,18 @@ class _ModernScheduleViewState extends State<ModernScheduleView>
               onLongPress: () => _showAulaOptions(aula),
             ),
           )),
+
+          // Botão para adicionar aula neste dia
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _showAddAulaDialogForDay(dia),
+            icon: const Icon(Icons.add),
+            label: const Text('Adicionar Aula'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+          ),
           
           const SizedBox(height: 100), // Espaço para o FAB
         ],
@@ -143,10 +155,21 @@ class _ModernScheduleViewState extends State<ModernScheduleView>
           ),
           const SizedBox(height: 8),
           Text(
-            'Toque no + para adicionar',
+            'Toque no botão abaixo para adicionar',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: () => _showAddAulaDialogForDay(dia),
+            icon: const Icon(Icons.add),
+            label: const Text('Adicionar Primeira Aula'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
           ),
         ],
@@ -155,16 +178,435 @@ class _ModernScheduleViewState extends State<ModernScheduleView>
   }
 
   void _showAddAulaDialog() {
-    // TODO: Implementar diálogo de adicionar aula
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Funcionalidade em desenvolvimento')),
+    final materiaController = TextEditingController();
+    final professorController = TextEditingController();
+    Color? corSelecionada;
+    final horariosRecorrentes = <String, Set<String>>{}; // dia -> set de horários
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Nova Aula'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Campo Matéria
+                TextField(
+                  controller: materiaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Matéria',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Campo Professor
+                TextField(
+                  controller: professorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Professor',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Seletor de cor
+                const Text('Cor (opcional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _buildCorOption(null, corSelecionada, setDialogState, (cor) => corSelecionada = cor),
+                    ...[ 
+                      Colors.red[300]!,
+                      Colors.blue[300]!,
+                      Colors.green[300]!,
+                      Colors.yellow[300]!,
+                      Colors.purple[300]!,
+                      Colors.orange[300]!,
+                      Colors.pink[300]!,
+                      Colors.teal[300]!,
+                    ].map((cor) => _buildCorOption(cor, corSelecionada, setDialogState, (c) => corSelecionada = c)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Seleção de horários
+                const Text('Selecione os horários:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...ClassesData.diasSemana.map((dia) {
+                  return ExpansionTile(
+                    title: Text(dia),
+                    children: ClassesData.horarios
+                        .where((h) => h != 'INTERVALO')
+                        .map((horario) {
+                      final jaTemAula = ClassesData.existeAula(dia, horario);
+                      final estaSelecionado = horariosRecorrentes[dia]?.contains(horario) ?? false;
+
+                      return CheckboxListTile(
+                        title: Text(horario),
+                        subtitle: jaTemAula ? const Text('Já possui aula', style: TextStyle(color: Colors.orange, fontSize: 11)) : null,
+                        value: estaSelecionado,
+                        dense: true,
+                        onChanged: (valor) {
+                          setDialogState(() {
+                            if (valor == true) {
+                              horariosRecorrentes.putIfAbsent(dia, () => {});
+                              horariosRecorrentes[dia]!.add(horario);
+                            } else {
+                              horariosRecorrentes[dia]?.remove(horario);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (materiaController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Por favor, insira a matéria')),
+                  );
+                  return;
+                }
+
+                if (horariosRecorrentes.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Selecione pelo menos um horário')),
+                  );
+                  return;
+                }
+
+                // Adiciona a aula para todos os horários selecionados
+                for (var dia in horariosRecorrentes.keys) {
+                  for (var horario in horariosRecorrentes[dia]!) {
+                    final aula = Aula(
+                      materia: materiaController.text.trim(),
+                      professor: professorController.text.trim(),
+                      diaSemana: dia,
+                      horario: horario,
+                      cor: corSelecionada,
+                    );
+                    ClassesData.adicionarAula(aula);
+                  }
+                }
+
+                await ClassesData.salvarAulas();
+                Navigator.pop(context);
+                setState(() {});
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Aula "${materiaController.text}" adicionada com sucesso!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  void _editAula(Aula aula) {
-    // TODO: Implementar edição de aula
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Editando: ${aula.materia}')),
+  void _showAddAulaDialogForDay(String diaFoco) {
+    final materiaController = TextEditingController();
+    final professorController = TextEditingController();
+    Color? corSelecionada;
+    final horariosRecorrentes = <String>{};
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Adicionar Aula para $diaFoco'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Campo Matéria
+                TextField(
+                  controller: materiaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Matéria',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Campo Professor
+                TextField(
+                  controller: professorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Professor',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Seletor de cor
+                const Text('Cor (opcional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _buildCorOption(null, corSelecionada, setDialogState, (cor) => corSelecionada = cor),
+                    ...[ 
+                      Colors.red[300]!,
+                      Colors.blue[300]!,
+                      Colors.green[300]!,
+                      Colors.yellow[300]!,
+                      Colors.purple[300]!,
+                      Colors.orange[300]!,
+                      Colors.pink[300]!,
+                      Colors.teal[300]!,
+                    ].map((cor) => _buildCorOption(cor, corSelecionada, setDialogState, (c) => corSelecionada = c)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Seleção de horários APENAS para este dia
+                const Text('Selecione os horários:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Column(
+                  children: ClassesData.horarios
+                      .where((h) => h != 'INTERVALO')
+                      .map((horario) {
+                    final jaTemAula = ClassesData.existeAula(diaFoco, horario);
+                    final estaSelecionado = horariosRecorrentes.contains(horario);
+
+                    return CheckboxListTile(
+                      title: Text(horario),
+                      subtitle: jaTemAula ? const Text('Já possui aula', style: TextStyle(color: Colors.orange, fontSize: 11)) : null,
+                      value: estaSelecionado,
+                      dense: true,
+                      onChanged: (valor) {
+                        setDialogState(() {
+                          if (valor == true) {
+                            horariosRecorrentes.add(horario);
+                          } else {
+                            horariosRecorrentes.remove(horario);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (materiaController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Por favor, insira a matéria')),
+                  );
+                  return;
+                }
+
+                if (horariosRecorrentes.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Selecione pelo menos um horário')),
+                  );
+                  return;
+                }
+
+                // Adiciona a aula para os horários selecionados neste dia
+                for (var horario in horariosRecorrentes) {
+                  final aula = Aula(
+                    materia: materiaController.text.trim(),
+                    professor: professorController.text.trim(),
+                    diaSemana: diaFoco,
+                    horario: horario,
+                    cor: corSelecionada,
+                  );
+                  ClassesData.adicionarAula(aula);
+                }
+
+                await ClassesData.salvarAulas();
+                Navigator.pop(context);
+                setState(() {});
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Aula "${materiaController.text}" adicionada com sucesso!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _editAula(Aula aulaOriginal) {
+    final materiaController = TextEditingController(text: aulaOriginal.materia);
+    final professorController = TextEditingController(text: aulaOriginal.professor);
+    Color? corSelecionada = aulaOriginal.cor;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Editar Aula - ${aulaOriginal.diaSemana} ${aulaOriginal.horario}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: materiaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Matéria',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: professorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Professor',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Cor (opcional):', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _buildCorOption(null, corSelecionada, setDialogState, (cor) => corSelecionada = cor),
+                    ...[ 
+                      Colors.red[300]!,
+                      Colors.blue[300]!,
+                      Colors.green[300]!,
+                      Colors.yellow[300]!,
+                      Colors.purple[300]!,
+                      Colors.orange[300]!,
+                      Colors.pink[300]!,
+                      Colors.teal[300]!,
+                    ].map((cor) => _buildCorOption(cor, corSelecionada, setDialogState, (c) => corSelecionada = c)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (materiaController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Por favor, insira a matéria')),
+                  );
+                  return;
+                }
+
+                final novaAula = Aula(
+                  materia: materiaController.text.trim(),
+                  professor: professorController.text.trim(),
+                  diaSemana: aulaOriginal.diaSemana,
+                  horario: aulaOriginal.horario,
+                  cor: corSelecionada,
+                );
+
+                ClassesData.removerAula(aulaOriginal.diaSemana, aulaOriginal.horario);
+                ClassesData.adicionarAula(novaAula);
+                await ClassesData.salvarAulas();
+
+                Navigator.pop(context);
+                setState(() {});
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Aula "${materiaController.text}" atualizada!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCorOption(
+    Color? cor,
+    Color? corSelecionada,
+    StateSetter setDialogState,
+    Function(Color?) onSelect,
+  ) {
+    final isSelected = cor == corSelecionada;
+    
+    if (cor == null) {
+      return InkWell(
+        onTap: () {
+          setDialogState(() => onSelect(null));
+        },
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            border: Border.all(
+              color: isSelected ? Colors.deepPurple : Colors.grey.shade300,
+              width: isSelected ? 3 : 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              '∅',
+              style: TextStyle(
+                color: isSelected ? Colors.deepPurple : Colors.grey,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: () {
+        setDialogState(() => onSelect(cor));
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cor,
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.transparent,
+            width: isSelected ? 3 : 0,
+          ),
+        ),
+      ),
     );
   }
 

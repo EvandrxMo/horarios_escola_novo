@@ -136,14 +136,27 @@ class _VerificadorPrimeiroAcessoState extends State<VerificadorPrimeiroAcesso> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final nome = prefs.getString('nome');
+      
+      debugPrint('🔍 Verificando primeiro acesso...');
+      debugPrint('📝 Nome armazenado: $nome');
+      
+      // Verifica se existe backup
       final existeBackup = await BackupService.existeBackup();
+      debugPrint('📦 Existe backup? $existeBackup');
+      
+      if (existeBackup) {
+        final backupInfo = await BackupService.getBackupInfo();
+        debugPrint('📦 Info do backup: $backupInfo');
+      }
 
       setState(() {
         _primeiroAcesso = (nome == null || nome.isEmpty);
         _existeBackup = existeBackup;
       });
+      
+      debugPrint('✅ Verificação completa: primeiroAcesso=$_primeiroAcesso, existeBackup=$_existeBackup');
     } catch (e, s) {
-      debugPrint('Erro em _verificarPrimeiroAcesso: $e\n$s');
+      debugPrint('❌ Erro em _verificarPrimeiroAcesso: $e\n$s');
       setState(() {
         _primeiroAcesso = true; // assume primeiro acesso em caso de problema
         _existeBackup = false;

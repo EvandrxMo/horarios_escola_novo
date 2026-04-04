@@ -22,6 +22,7 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
 
   Future<void> _carregarInfoBackup() async {
     final info = await BackupService.getBackupInfo();
+    debugPrint('📦 Info do backup carregada: $info');
     setState(() {
       _backupInfo = info;
       _isLoading = false;
@@ -34,36 +35,41 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
     });
 
     try {
+      debugPrint('🔄 Iniciando restauração do backup...');
       final sucesso = await BackupService.restaurarBackup();
       
       if (sucesso) {
         // Recarrega os dados do AppData após restauração
         await AppData.carregarDados();
+        debugPrint('✅ Backup restaurado com sucesso!');
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Dados restaurados com sucesso!'),
+              content: Text('✅ Seus dados foram restaurados com sucesso!'),
               backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
             ),
           );
           Navigator.of(context).pop(true); // Retorna true para indicar sucesso
         }
       } else {
+        debugPrint('❌ Falha ao restaurar backup');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Erro ao restaurar backup'),
+              content: Text('❌ Erro ao restaurar backup'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
+      debugPrint('❌ Erro na restauração: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro: $e'),
+            content: Text('❌ Erro: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -81,101 +87,11 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
     Navigator.of(context).pop(false);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.restore, color: Colors.deepPurple),
-          SizedBox(width: 8),
-          Text('Backup Encontrado'),
-        ],
-      ),
-      content: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _backupInfo != null
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Encontramos um backup anterior:',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                    ),
-                    SizedBox(height: 16),
-                    _buildInfoRow('Nome:', _backupInfo!['nomeUsuario']),
-                    _buildInfoRow('Data do backup:', _formatarData(_backupInfo!['dataBackup'])),
-                    _buildInfoRow('Versão:', _backupInfo!['versao']),
-                    _buildInfoRow('Tamanho:', _formatarTamanho(_backupInfo!['tamanho'])),
-                    SizedBox(height: 16),
-                    Text(
-                      'Deseja restaurar seus dados?',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
-                )
-              : Text('Nenhum backup encontrado.'),
-      actions: [
-        if (_backupInfo != null) ...[
-          TextButton(
-            onPressed: _isRestoring ? null : _ignorarBackup,
-            child: Text('Ignorar'),
-          ),
-          ElevatedButton(
-            onPressed: _isRestoring ? null : _restaurarBackup,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-            ),
-            child: _isRestoring
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text('Restaurar'),
-          ),
-        ] else ...[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK'),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(color: Colors.grey[700]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatarData(String dataStr) {
+  String _formatarData(String? dataStr) {
+    if (dataStr == null) return 'Desconhecida';
     try {
       final data = DateTime.parse(dataStr);
-      return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year} ${data.hour.toString().padLeft(2, '0')}:${data.minute.toString().padLeft(2, '0')}';
+      return '${data.day}/${data.month}/${data.year} às ${data.hour.toString().padLeft(2, '0')}:${data.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return dataStr;
     }
@@ -184,6 +100,243 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
   String _formatarTamanho(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+  }
+
+  Widget _buildInfoRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value ?? 'N/A',
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: _isLoading
+          ? const Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            )
+          : _backupInfo != null
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header com ícone
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.backup_rounded,
+                          size: 48,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Título
+                      const Text(
+                        'Dados Anteriores Encontrados!',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Subtítulo
+                      Text(
+                        'Temos um backup seguro dos seus dados. Deseja restaurá-los?',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Card com informações
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.grey.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Info: Usuário
+                            _buildInfoRow(
+                              '👤 Usuário:',
+                              _backupInfo!['nomeUsuario'],
+                            ),
+                            const Divider(height: 12),
+
+                            // Info: Data
+                            _buildInfoRow(
+                              '📅 Data do Backup:',
+                              _formatarData(_backupInfo!['dataBackup']),
+                            ),
+                            const Divider(height: 12),
+
+                            // Info: Versão
+                            _buildInfoRow(
+                              '📦 Versão:',
+                              _backupInfo!['versao'],
+                            ),
+                            const Divider(height: 12),
+
+                            // Info: Tamanho
+                            _buildInfoRow(
+                              '💾 Tamanho:',
+                              _formatarTamanho(_backupInfo!['tamanho'] ?? 0),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Botões
+                      Row(
+                        children: [
+                          // Botão Não
+                          Expanded(
+                            child: TextButton(
+                              onPressed: _isRestoring ? null : _ignorarBackup,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                              ),
+                              child: const Text(
+                                'Começar do Zero',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Botão Sim
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _isRestoring ? null : _restaurarBackup,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: _isRestoring
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Restaurar Dados',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        size: 48,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Nenhum Backup Encontrado',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Não conseguimos localizar um backup anterior. Você começará com um novo cadastro.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Continuar',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+    );
   }
 }

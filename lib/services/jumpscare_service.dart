@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import '../widgets/jumpscare_dialog.dart';
 
 class JumpscareService {
@@ -22,9 +23,51 @@ class JumpscareService {
     
     _jumpscareTimer = Timer(Duration(seconds: randomDelay), () {
       if (!_hasTriggeredToday && context.mounted) {
-        _triggerJumpscare(context);
+        _verificarCondicopesJumpscare(context);
       }
     });
+  }
+
+  // Verifica as condições para o jumpscare
+  static Future<void> _verificarCondicopesJumpscare(BuildContext context) async {
+    try {
+      final now = DateTime.now();
+      final hora = now.hour;
+      final minuto = now.minute;
+      
+      // Verifica se é após 22:30
+      final aposAs22h30 = hora > 22 || (hora == 22 && minuto >= 30);
+      
+      if (!aposAs22h30) {
+        // Não é após 22:30, agenda novo jumpscare
+        startJumpscareTimer(context);
+        return;
+      }
+
+      // Verifica o brilho da tela
+      try {
+        final brightness = await ScreenBrightness.instance.current;
+        // brightness varia de 0.0 a 1.0
+        final brightnessPercentage = brightness * 100;
+
+        if (brightnessPercentage <= 75) {
+          // Brilho abaixo de 75%, não aciona jumpscare
+          startJumpscareTimer(context);
+          return;
+        }
+      } catch (e) {
+        print('Erro ao obter brilho: $e');
+        // Se não conseguir obter brilho, não aciona jumpscare
+        startJumpscareTimer(context);
+        return;
+      }
+
+      // Se chegou aqui, todas as condições foram atendidas
+      _triggerJumpscare(context);
+    } catch (e) {
+      print('Erro ao verificar condições do jumpscare: $e');
+      startJumpscareTimer(context);
+    }
   }
 
   // Aciona o jumpscare

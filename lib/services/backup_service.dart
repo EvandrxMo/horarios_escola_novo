@@ -67,6 +67,8 @@ class BackupService {
   static Future<bool> criarBackup() async {
     try {
       final directory = await _backupDirectory;
+      debugPrint('💾 Criando backup em: ${directory.path}/$_backupFileName');
+      
       final backupFile = File('${directory.path}/$_backupFileName');
       
       // Coleta todos os dados
@@ -88,9 +90,11 @@ class BackupService {
         encoding: utf8,
       );
       
+      final fileSize = await backupFile.length();
+      debugPrint('✅ Backup criado com sucesso! (${(fileSize / 1024).toStringAsFixed(2)} KB)');
       return true;
     } catch (e) {
-      debugPrint('Erro ao criar backup: $e');
+      debugPrint('❌ Erro ao criar backup: $e');
       return false;
     }
   }
@@ -98,27 +102,40 @@ class BackupService {
   // Restaura dados do backup
   static Future<bool> restaurarBackup() async {
     try {
+      debugPrint('🔄 Iniciando restauração de backup...');
       final directory = await _backupDirectory;
       final backupFile = File('${directory.path}/$_backupFileName');
       
-      if (!await backupFile.exists()) return false;
+      if (!await backupFile.exists()) {
+        debugPrint('❌ Arquivo de backup não encontrado');
+        return false;
+      }
       
       final content = await backupFile.readAsString(encoding: utf8);
       final backupData = jsonDecode(content);
       
-      // Restaura AppData
+      debugPrint('📦 Restaurando AppData...');
       await _restoreAppData(backupData['appData']);
       
-      // Restaura outros dados
+      debugPrint('📚 Restaurando Classes...');
       await _restoreClassesData(backupData['classesData']);
+      
+      debugPrint('✏️ Restaurando Provas...');
       await _restoreProvasData(backupData['provasData']);
+      
+      debugPrint('✅ Restaurando Tarefas...');
       await _restoreTarefasData(backupData['tarefasData']);
+      
+      debugPrint('📷 Restaurando Notas...');
       await _restoreNotesData(backupData['notesData']);
+      
+      debugPrint('😊 Restaurando Humor...');
       await _restoreMoodData(backupData['moodData']);
       
+      debugPrint('✅ Backup restaurado com sucesso!');
       return true;
     } catch (e) {
-      debugPrint('Erro ao restaurar backup: $e');
+      debugPrint('❌ Erro ao restaurar backup: $e');
       return false;
     }
   }
@@ -210,28 +227,94 @@ class BackupService {
     await AppData.salvarDados();
   }
 
-  static Future<void> _restoreClassesData(Map<String, dynamic> data) async {
-    // Implementar restauração de classesData quando necessário
-    // Isso exigirá modificar classesData.dart para ter método de restauração
+  static Future<void> _restoreClassesData(Map<String, dynamic>? data) async {
+    try {
+      if (data == null || data['aulas'] == null) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final aulasList = data['aulas'] as Map<String, dynamic>;
+      
+      // Converte de volta para JSON array
+      final aulasJson = jsonEncode(aulasList.values.toList());
+      await prefs.setString('aulas', aulasJson);
+      
+      // Recarrega ClassesData
+      await ClassesData.carregarAulas();
+      debugPrint('✅ Classes restauradas: ${aulasList.length} aulas');
+    } catch (e) {
+      debugPrint('❌ Erro ao restaurar Classes: $e');
+    }
   }
 
-  static Future<void> _restoreProvasData(Map<String, dynamic> data) async {
-    // Implementar restauração de provasData quando necessário
-    // Isso exigirá modificar provasData.dart para ter método de restauração
+  static Future<void> _restoreProvasData(Map<String, dynamic>? data) async {
+    try {
+      if (data == null || data['provas'] == null) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final provasList = data['provas'] as List<dynamic>;
+      
+      final provasJson = jsonEncode(provasList);
+      await prefs.setString('provas', provasJson);
+      
+      // Recarrega ProvasData
+      await ProvasData.carregarProvas();
+      debugPrint('✅ Provas restauradas: ${provasList.length} provas');
+    } catch (e) {
+      debugPrint('❌ Erro ao restaurar Provas: $e');
+    }
   }
 
-  static Future<void> _restoreTarefasData(Map<String, dynamic> data) async {
-    // Implementar restauração de tarefasData quando necessário
-    // Isso exigirá modificar tarefasData.dart para ter método de restauração
+  static Future<void> _restoreTarefasData(Map<String, dynamic>? data) async {
+    try {
+      if (data == null || data['tarefas'] == null) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final tarefasList = data['tarefas'] as List<dynamic>;
+      
+      final tarefasJson = jsonEncode(tarefasList);
+      await prefs.setString('tarefas', tarefasJson);
+      
+      // Recarrega TarefasData
+      await TarefasData.carregarTarefas();
+      debugPrint('✅ Tarefas restauradas: ${tarefasList.length} tarefas');
+    } catch (e) {
+      debugPrint('❌ Erro ao restaurar Tarefas: $e');
+    }
   }
 
-  static Future<void> _restoreNotesData(Map<String, dynamic> data) async {
-    // Implementar restauração de notesData quando necessário
-    // Isso exigirá modificar notesData.dart para ter método de restauração
+  static Future<void> _restoreNotesData(Map<String, dynamic>? data) async {
+    try {
+      if (data == null || data['notas'] == null) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final notasList = data['notas'] as List<dynamic>;
+      
+      final notasJson = jsonEncode(notasList);
+      await prefs.setString('notas', notasJson);
+      
+      // Recarrega NotasData
+      await NotasData.carregarNotas();
+      debugPrint('✅ Notas restauradas: ${notasList.length} notas');
+    } catch (e) {
+      debugPrint('❌ Erro ao restaurar Notas: $e');
+    }
   }
 
-  static Future<void> _restoreMoodData(Map<String, dynamic> data) async {
-    // Implementar restauração de moodData quando necessário
-    // Isso exigirá modificar moodData.dart para ter método de restauração
+  static Future<void> _restoreMoodData(Map<String, dynamic>? data) async {
+    try {
+      if (data == null || data['moodEntries'] == null) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final moodList = data['moodEntries'] as List<dynamic>;
+      
+      final moodJson = jsonEncode(moodList);
+      await prefs.setString('mood_entries', moodJson);
+      
+      // Recarrega MoodData
+      await MoodData.carregarRegistros();
+      debugPrint('✅ Registros de humor restaurados: ${moodList.length} registros');
+    } catch (e) {
+      debugPrint('❌ Erro ao restaurar Mood: $e');
+    }
   }
 }

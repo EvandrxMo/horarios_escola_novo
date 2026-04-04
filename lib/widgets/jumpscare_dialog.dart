@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
 
 class JumpscareDialog extends StatefulWidget {
   const JumpscareDialog({super.key});
@@ -16,10 +17,14 @@ class _JumpscareDialogState extends State<JumpscareDialog>
   late Animation<double> _shakeAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  late AudioPlayer _audioPlayer;
 
   @override
   void initState() {
     super.initState();
+    
+    // Inicializar AudioPlayer
+    _audioPlayer = AudioPlayer();
     
     // Controlador de shake (tremedeira)
     _shakeController = AnimationController(
@@ -87,17 +92,16 @@ class _JumpscareDialogState extends State<JumpscareDialog>
 
   Future<void> _playJumpscareSound() async {
     try {
-      // Aumentar volume do sistema ao máximo (se possível)
-      await SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
+      // Configura o volume ao máximo
+      await _audioPlayer.setVolume(1.0);
       
-      // TODO: Implementar áudio quando o pacote for adicionado
-      // Por enquanto, vamos usar feedback visual intenso
+      // Toca o arquivo de som FAH.mp3
+      await _audioPlayer.setAsset('assets/sounds/FAH.mp3');
+      await _audioPlayer.play();
       
+      debugPrint('🔊 Som FAH tocando...');
     } catch (e) {
-      print('Erro ao tocar som: $e');
+      debugPrint('Erro ao tocar som: $e');
     }
   }
 
@@ -118,6 +122,7 @@ class _JumpscareDialogState extends State<JumpscareDialog>
     _shakeController.dispose();
     _fadeController.dispose();
     _scaleController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
