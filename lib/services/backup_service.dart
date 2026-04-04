@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import '../preferences/appData.dart';
 import '../preferences/classesData.dart';
@@ -308,10 +309,10 @@ class BackupService {
       final moodList = data['moodEntries'] as List<dynamic>;
       
       final moodJson = jsonEncode(moodList);
-      await prefs.setString('mood_entries', moodJson);
+      await prefs.setString('moods', moodJson);
       
       // Recarrega MoodData
-      await MoodData.carregarRegistros();
+      await MoodData.carregarMoods();
       debugPrint('✅ Registros de humor restaurados: ${moodList.length} registros');
     } catch (e) {
       debugPrint('❌ Erro ao restaurar Mood: $e');
