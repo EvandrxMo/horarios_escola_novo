@@ -108,25 +108,28 @@ class ClassesData {
     final diaAtual = _obterDiaSemana(agora.weekday);
     final horaAtual = '${agora.hour}:${agora.minute.toString().padLeft(2, '0')}';
 
-    // Se não for dia de aula (sábado/domingo), retorna null
-    if (diaAtual == null) return null;
-
-    // Procura a próxima aula no dia atual
-    for (var horario in horarios) {
-      if (horario == 'INTERVALO') continue;
-      
-      final aula = buscarAula(diaAtual, horario);
-      if (aula != null && _horarioMaiorOuIgual(horario, horaAtual)) {
-        return aula;
-      }
-    }
-
-    // Se não encontrou no dia atual, procura no próximo dia
-    final indexDiaAtual = diasSemana.indexOf(diaAtual);
-    for (int i = indexDiaAtual + 1; i < diasSemana.length; i++) {
+    int startIndex = 0;
+    if (diaAtual != null) {
+      // Procura a próxima aula no dia atual
       for (var horario in horarios) {
         if (horario == 'INTERVALO') continue;
-        
+
+        final aula = buscarAula(diaAtual, horario);
+        if (aula != null && _horarioMaiorOuIgual(horario, horaAtual)) {
+          return aula;
+        }
+      }
+
+      // Se não encontrou no dia atual, procura a partir do próximo dia útil
+      final indexDiaAtual = diasSemana.indexOf(diaAtual);
+      startIndex = indexDiaAtual + 1;
+    }
+
+    // Se for sábado/domingo ou se não encontrou hoje, procura nos próximos dias úteis
+    for (int i = startIndex; i < diasSemana.length; i++) {
+      for (var horario in horarios) {
+        if (horario == 'INTERVALO') continue;
+
         final aula = buscarAula(diasSemana[i], horario);
         if (aula != null) return aula;
       }

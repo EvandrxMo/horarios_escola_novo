@@ -63,6 +63,11 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+
 	<!-- 🔓 PERMITIR API DA SPTRANS (cookies / sessão) -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

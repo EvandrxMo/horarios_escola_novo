@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.horarios_escola_novo">
+    package="com.horarios_escola_novo">
 
     <!-- PERMISSÕES NECESSÁRIAS -->
     <uses-permission android:name="android.permission.INTERNET"/>

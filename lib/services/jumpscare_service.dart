@@ -9,6 +9,13 @@ class JumpscareService {
   static Timer? _jumpscareTimer;
   static bool _hasTriggeredToday = false;
   static const String _lastTriggerKey = 'last_jumpscare_date';
+  static bool _modoAgressivo = true;
+
+  static bool get modoAgressivo => _modoAgressivo;
+
+  static void setModoAgressivo(bool value) {
+    _modoAgressivo = value;
+  }
 
   // Inicia o timer para o jumpscare
   static void startJumpscareTimer(BuildContext context) {
@@ -18,28 +25,33 @@ class JumpscareService {
     // Cancela timer anterior se existir
     _jumpscareTimer?.cancel();
 
-    // Tempo aleatório entre 7 e 10 segundos
-    final randomDelay = Random().nextInt(4) + 7; // 7, 8, 9 ou 10 segundos
+    // Perfil agressivo mantém checagem frequente; moderado poupa bateria.
+    final randomDelay = _modoAgressivo
+      ? (Random().nextInt(4) + 7) // 7..10s
+      : (Random().nextInt(121) + 60); // 60..180s
     
     _jumpscareTimer = Timer(Duration(seconds: randomDelay), () {
       if (!_hasTriggeredToday && context.mounted) {
-        _verificarCondicopesJumpscare(context);
+        _verificarCondicoesJumpscare(context);
       }
     });
   }
 
   // Verifica as condições para o jumpscare
-  static Future<void> _verificarCondicopesJumpscare(BuildContext context) async {
+  static Future<void> _verificarCondicoesJumpscare(BuildContext context) async {
     try {
       final now = DateTime.now();
       final hora = now.hour;
       final minuto = now.minute;
       
-      // Verifica se é após 22:30
-      final aposAs22h30 = hora > 22 || (hora == 22 && minuto >= 30);
-      
-      if (!aposAs22h30) {
-        // Não é após 22:30, agenda novo jumpscare
+      // Janela de ativação: 22:30 até 04:30 (atravessa meia-noite)
+      final dentroJanelaNoturna =
+          (hora > 22 || (hora == 22 && minuto >= 30)) ||
+          (hora < 4 || (hora == 4 && minuto <= 30));
+
+      if (!dentroJanelaNoturna) {
+        // Fora da janela, agenda nova checagem
+        if (!context.mounted) return;
         startJumpscareTimer(context);
         return;
       }
@@ -52,22 +64,30 @@ class JumpscareService {
 
         if (brightnessPercentage <= 75) {
           // Brilho abaixo de 75%, não aciona jumpscare
+          if (!context.mounted) return;
           startJumpscareTimer(context);
           return;
         }
       } catch (e) {
-        print('Erro ao obter brilho: $e');
+        debugPrint('Erro ao obter brilho: $e');
         // Se não conseguir obter brilho, não aciona jumpscare
+        if (!context.mounted) return;
         startJumpscareTimer(context);
         return;
       }
 
       // Se chegou aqui, todas as condições foram atendidas
+      if (!context.mounted) return;
       _triggerJumpscare(context);
     } catch (e) {
-      print('Erro ao verificar condições do jumpscare: $e');
+      debugPrint('Erro ao verificar condições do jumpscare: $e');
+      if (!context.mounted) return;
       startJumpscareTimer(context);
     }
+  }
+
+  static Future<void> runCheckNow(BuildContext context) async {
+    await _verificarCondicoesJumpscare(context);
   }
 
   // Aciona o jumpscare
@@ -86,7 +106,7 @@ class JumpscareService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_lastTriggerKey, DateTime.now().toIso8601String());
     } catch (e) {
-      print('Erro ao salvar data do jumpscare: $e');
+      debugPrint('Erro ao salvar data do jumpscare: $e');
     }
   }
 
@@ -111,9 +131,27 @@ class JumpscareService {
         }
       }
     } catch (e) {
-      print('Erro ao verificar data do jumpscare: $e');
+      debugPrint('Erro ao verificar data do jumpscare: $e');
       _hasTriggeredToday = false;
     }
+  }
+
+  static Future<Map<String, String>> getDebugInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final hora = now.hour;
+    final minuto = now.minute;
+    final dentroJanelaNoturna =
+        (hora > 22 || (hora == 22 && minuto >= 30)) ||
+        (hora < 4 || (hora == 4 && minuto <= 30));
+
+    final lastTrigger = prefs.getString(_lastTriggerKey) ?? 'nunca';
+    return {
+      'modo': _modoAgressivo ? 'Agressivo (7-10s)' : 'Moderado (60-180s)',
+      'janela': dentroJanelaNoturna ? 'Dentro da janela' : 'Fora da janela',
+      'acionouHoje': _hasTriggeredToday ? 'Sim' : 'Não',
+      'ultimoDisparo': lastTrigger,
+    };
   }
 
   // Para o timer (chamar ao fechar o app)

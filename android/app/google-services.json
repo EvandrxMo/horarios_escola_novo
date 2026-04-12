@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "112262833597",
-    "project_id": "horarios-escola-novo",
-    "storage_bucket": "horarios-escola-novo.firebasestorage.app"
+    "project_number": "181783998271",
+    "project_id": "yasmin-f5265",
+    "storage_bucket": "yasmin-f5265.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:112262833597:android:0209211f2c464306dbded4",
+        "mobilesdk_app_id": "1:181783998271:android:bda03d78026050f234ed8a",
         "android_client_info": {
-          "package_name": "com.example.horarios_escola_novo"
+          "package_name": "com.horarios_escola_novo"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDJCr2sXUEDaUi-M48847acE02TXSgLDhs"
+          "current_key": "AIzaSyBHQnpUTXCf-zdlYLkYIFDoDAY1NmLSItc"
         }
       ],
       "services": {

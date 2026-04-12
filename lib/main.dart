@@ -4,19 +4,83 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/primeira_tela.dart';
 import 'pages/home_tela.dart';
 import 'preferences/appData.dart';
+import 'preferences/classesData.dart';
+import 'preferences/moodData.dart';
+import 'preferences/notesData.dart';
+import 'preferences/provasData.dart';
+import 'preferences/tarefasData.dart';
 import 'services/backup_service.dart';
+import 'services/remote_messaging_service.dart';
 import 'widgets/backup_restore_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await AppData.carregarDados();
+    await RemoteMessagingService.initialize();
+  } catch (e, s) {
+    debugPrint('Firebase push não configurado ainda: $e\n$s');
+  }
+
+  try {
+    await _carregarDadosComAutoRestauracao();
   } catch (e, s) {
     debugPrint('Erro ao carregar AppData: $e\n$s');
   }
 
-  runApp(const MeuApp());
+  runApp(const AppWrapper());
+}
+
+Future<void> _carregarDadosComAutoRestauracao() async {
+  await AppData.carregarDados();
+  await ClassesData.carregarAulas();
+  await ProvasData.carregarProvas();
+  await TarefasData.carregarTarefas();
+  await NotasData.carregarNotas();
+  await MoodData.carregarMoods();
+
+  final semDadosLocais = AppData.nome.trim().isEmpty &&
+      ClassesData.aulas.isEmpty &&
+      ProvasData.provas.isEmpty &&
+      TarefasData.tarefas.isEmpty &&
+      NotasData.notas.isEmpty;
+
+  if (!semDadosLocais) return;
+
+  final temBackup = await BackupService.existeBackup();
+  if (!temBackup) return;
+
+  final restaurado = await BackupService.restaurarBackup();
+  if (!restaurado) return;
+
+  // Recarrega em memória após restaurar do backup.
+  await AppData.carregarDados();
+  await ClassesData.carregarAulas();
+  await ProvasData.carregarProvas();
+  await TarefasData.carregarTarefas();
+  await NotasData.carregarNotas();
+  await MoodData.carregarMoods();
+}
+
+// Wrapper para gerenciar limpeza de recursos
+class AppWrapper extends StatefulWidget {
+  const AppWrapper({super.key});
+
+  @override
+  State<AppWrapper> createState() => _AppWrapperState();
+}
+
+class _AppWrapperState extends State<AppWrapper> {
+  @override
+  void dispose() {
+    RemoteMessagingService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const MeuApp();
+  }
 }
 
 class MeuApp extends StatelessWidget {

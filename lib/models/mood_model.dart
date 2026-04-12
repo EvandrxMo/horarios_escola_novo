@@ -19,7 +19,7 @@ class Mood {
     Mood(
       emoji: '😢',
       imagePath: 'assets/images/mel.png',
-      nome: 'Triste',
+      nome: 'Borocoxo',
       cor: Color(0xFF3B82F6), // Azul
       valor: 1,
     ),

@@ -1,4 +1,4 @@
-package com.example.horarios_escola_novo
+package com.horarios_escola_novo
 
 import io.flutter.embedding.android.FlutterActivity
 

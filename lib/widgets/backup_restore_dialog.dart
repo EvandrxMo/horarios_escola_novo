@@ -30,35 +30,48 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
   }
 
   Future<void> _restaurarBackup() async {
+    final confirmar = await _confirmarRestauracaoFinal();
+    if (!confirmar) return;
+
     setState(() {
       _isRestoring = true;
     });
 
     try {
       debugPrint('🔄 Iniciando restauração do backup...');
-      final sucesso = await BackupService.restaurarBackup();
+      final report = await BackupService.restaurarBackupComRelatorio();
       
-      if (sucesso) {
+      if (report.success) {
         // Recarrega os dados do AppData após restauração
         await AppData.carregarDados();
-        debugPrint('✅ Backup restaurado com sucesso!');
+        debugPrint('✅ Restauração concluída: parcial=${report.partial}');
         
         if (mounted) {
+          final restaurados = report.restaurados.length;
+          final falhas = report.falharam.length;
+          final origem = report.origem ?? 'fonte desconhecida';
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Seus dados foram restaurados com sucesso!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(
+                report.partial
+                    ? '⚠️ Restauração parcial ($restaurados ok, $falhas falhas) - $origem'
+                    : '✅ Seus dados foram restaurados com sucesso! ($origem)',
+              ),
+              backgroundColor: report.partial ? Colors.orange : Colors.green,
+              duration: const Duration(seconds: 3),
             ),
           );
           Navigator.of(context).pop(true); // Retorna true para indicar sucesso
         }
       } else {
-        debugPrint('❌ Falha ao restaurar backup');
+        debugPrint('❌ Falha ao restaurar backup: ${report.falharam}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Erro ao restaurar backup'),
+            SnackBar(
+              content: Text(
+                '❌ Erro ao restaurar backup (${report.falharam.join(', ')})',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -85,6 +98,34 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
 
   Future<void> _ignorarBackup() async {
     Navigator.of(context).pop(false);
+  }
+
+  Future<bool> _confirmarRestauracaoFinal() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar restauração'),
+        content: const Text(
+          'Esta ação pode sobrescrever os dados atuais do app com o conteúdo do backup. Deseja continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Restaurar agora'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   String _formatarData(String? dataStr) {
@@ -152,7 +193,7 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple.withOpacity(0.1),
+                          color: Colors.deepPurple.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Icon(
@@ -176,7 +217,7 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
 
                       // Subtítulo
                       Text(
-                        'Temos um backup seguro dos seus dados. Deseja restaurá-los?',
+                        'Encontramos um backup dos seus dados. Deseja restaurá-los?',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[600],
@@ -223,6 +264,13 @@ class _BackupRestoreDialogState extends State<BackupRestoreDialog> {
                             _buildInfoRow(
                               '💾 Tamanho:',
                               _formatarTamanho(_backupInfo!['tamanho'] ?? 0),
+                            ),
+                            const Divider(height: 12),
+
+                            // Info: Origem
+                            _buildInfoRow(
+                              '📍 Origem:',
+                              _backupInfo!['origem'],
                             ),
                           ],
                         ),

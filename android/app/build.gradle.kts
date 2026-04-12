@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.horarios_escola_novo"
+    namespace = "com.horarios_escola_novo"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.horarios_escola_novo"
+        applicationId = "com.horarios_escola_novo"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 1

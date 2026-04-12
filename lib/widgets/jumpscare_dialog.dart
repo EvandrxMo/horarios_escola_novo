@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 
 class JumpscareDialog extends StatefulWidget {
   const JumpscareDialog({super.key});
@@ -92,14 +92,42 @@ class _JumpscareDialogState extends State<JumpscareDialog>
 
   Future<void> _playJumpscareSound() async {
     try {
-      // Configura o volume ao máximo
+      final session = await AudioSession.instance;
+      await session.configure(
+        const AudioSessionConfiguration(
+          avAudioSessionCategory: AVAudioSessionCategory.playback,
+          avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.none,
+          avAudioSessionMode: AVAudioSessionMode.defaultMode,
+          avAudioSessionRouteSharingPolicy:
+              AVAudioSessionRouteSharingPolicy.defaultPolicy,
+          avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+          androidAudioAttributes: AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+          androidWillPauseWhenDucked: false,
+        ),
+      );
+      await session.setActive(true);
+
+      // Configura o player e pré-carrega o asset antes de tocar.
+      await _audioPlayer.stop();
       await _audioPlayer.setVolume(1.0);
-      
-      // Toca o arquivo de som FAH.mp3
       await _audioPlayer.setAsset('assets/sounds/FAH.mp3');
+      await _audioPlayer.seek(Duration.zero);
       await _audioPlayer.play();
-      
-      debugPrint('🔊 Som FAH tocando...');
+
+      // Fallback: em alguns dispositivos o primeiro play não inicia.
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (!_audioPlayer.playing && mounted) {
+        debugPrint('⚠️ Primeira tentativa não iniciou, repetindo play...');
+        await session.setActive(true);
+        await _audioPlayer.seek(Duration.zero);
+        await _audioPlayer.play();
+      }
+
+      debugPrint('🔊 Som FAH acionado. playing=${_audioPlayer.playing}');
     } catch (e) {
       debugPrint('Erro ao tocar som: $e');
     }
@@ -113,7 +141,7 @@ class _JumpscareDialogState extends State<JumpscareDialog>
         // TODO: Implementar vibração quando possível
       }
     } catch (e) {
-      print('Erro na vibração: $e');
+      debugPrint('Erro na vibração: $e');
     }
   }
 
@@ -128,11 +156,8 @@ class _JumpscareDialogState extends State<JumpscareDialog>
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Impede fechar o diálogo facilmente
-        return false;
-      },
+    return PopScope(
+      canPop: false,
       child: Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: EdgeInsets.zero,
@@ -151,7 +176,7 @@ class _JumpscareDialogState extends State<JumpscareDialog>
                   child: Container(
                     width: MediaQuery.of(context).size.width,
                     height: MediaQuery.of(context).size.height,
-                    color: Colors.black.withOpacity(0.95),
+                    color: Colors.black.withValues(alpha: 0.95),
                     child: Stack(
                       children: [
                         // Imagem Rasputin centralizada e gigante
@@ -163,7 +188,7 @@ class _JumpscareDialogState extends State<JumpscareDialog>
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.red.withOpacity(0.8),
+                                  color: Colors.red.withValues(alpha: 0.8),
                                   blurRadius: 50,
                                   spreadRadius: 20,
                                 ),
@@ -253,7 +278,7 @@ class _JumpscareDialogState extends State<JumpscareDialog>
                                     _showNormalBrightnessDialog();
                                   },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red.withOpacity(0.8),
+                                    backgroundColor: Colors.red.withValues(alpha: 0.8),
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 20,

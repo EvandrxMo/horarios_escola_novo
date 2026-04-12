@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../preferences/appData.dart';
 import '../preferences/classesData.dart';
@@ -7,10 +8,13 @@ import '../preferences/provasData.dart';
 import '../preferences/moodData.dart';
 import '../services/sptransService.dart';
 import '../services/jumpscare_service.dart';
+import '../services/backup_service.dart';
+import '../services/remote_messaging_service.dart';
 import '../models/onibus_model.dart';
 import '../widgets/aniversario.dart';
 import '../widgets/brilho_noturno.dart';
 import '../widgets/mood_detector_dialog.dart';
+import '../widgets/backup_restore_dialog.dart';
 import 'classes_modern_tela.dart' as classes;
 import 'provas_tela.dart';
 import 'onibus_detalhes_tela.dart';
@@ -99,6 +103,8 @@ class HomeContent extends StatefulWidget {
 class _HomeContentState extends State<HomeContent> {
   final SPTransService _onibusService = SPTransService();
   PrevisaoOnibus? _proximoOnibus;
+  RemoteInAppBanner? _remoteBanner;
+  String? _lastForegroundBannerId;
   bool _carregandoOnibus = false;
   Timer? _timerOnibus;
   bool _aniversarioJaMostrado = false;
@@ -119,6 +125,8 @@ class _HomeContentState extends State<HomeContent> {
   @override
   void initState() {
     super.initState();
+    RemoteMessagingService.inAppBannerNotifier.addListener(_onRemoteBannerChanged);
+    _carregarBannerRemotoPendente();
     _carregarDados();
     _buscarProximoOnibus();
     _verificarAniversario();
@@ -130,14 +138,198 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
 
+  Future<void> _carregarBannerRemotoPendente() async {
+    final banner = await RemoteMessagingService.loadPendingBanner();
+    if (!mounted || banner == null) return;
+
+    setState(() {
+      _remoteBanner = banner;
+    });
+
+    await _mostrarBannerEmPrimeiroPlanoSeNecessario(banner);
+  }
+
+  void _onRemoteBannerChanged() {
+    final banner = RemoteMessagingService.inAppBannerNotifier.value;
+    if (!mounted || banner == null) return;
+
+    setState(() {
+      _remoteBanner = banner;
+    });
+
+    _mostrarBannerEmPrimeiroPlanoSeNecessario(banner);
+  }
+
+  Future<void> _mostrarBannerEmPrimeiroPlanoSeNecessario(
+    RemoteInAppBanner banner,
+  ) async {
+    if (!banner.openInForeground) return;
+    if (_lastForegroundBannerId == banner.id) return;
+
+    _lastForegroundBannerId = banner.id;
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(banner.title),
+        content: Text(banner.body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+
+    await RemoteMessagingService.markBannerAsViewed(banner.id);
+  }
+
+  Future<void> _dispensarBannerRemoto() async {
+    await RemoteMessagingService.dismissPendingBanner();
+    if (!mounted) return;
+    setState(() {
+      _remoteBanner = null;
+    });
+  }
+
   Future<void> _iniciarJumpscare() async {
     await JumpscareService.checkLastTriggerDate();
+    if (!mounted) return;
     JumpscareService.startJumpscareTimer(context);
+  }
+
+  Future<void> _abrirPainelTesteRasputin() async {
+    final infoInicial = await JumpscareService.getDebugInfo();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        Map<String, String> info = infoInicial;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> atualizarInfo() async {
+              final novoInfo = await JumpscareService.getDebugInfo();
+              setSheetState(() {
+                info = novoInfo;
+              });
+            }
+
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Painel de Teste Rasputin (Debug)',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Modo: ${info['modo']}'),
+                  Text('Janela: ${info['janela']}'),
+                  Text('Acionou hoje: ${info['acionouHoje']}'),
+                  Text('Último disparo: ${info['ultimoDisparo']}'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            JumpscareService.setModoAgressivo(
+                              !JumpscareService.modoAgressivo,
+                            );
+                            await atualizarInfo();
+                          },
+                          child: const Text('Alternar Modo'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            JumpscareService.resetFlag();
+                            await atualizarInfo();
+                          },
+                          child: const Text('Resetar Hoje'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            await JumpscareService.runCheckNow(context);
+                            await atualizarInfo();
+                          },
+                          child: const Text('Checar Agora'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            JumpscareService.forceJumpscare(context);
+                          },
+                          child: const Text('Forçar Rasputin'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final ok = await BackupService.debugPrepararCenarioHeranca();
+                        if (!context.mounted) return;
+
+                        if (!ok) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('❌ Falha ao preparar teste de herança'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.of(context).pop();
+
+                        if (!mounted) return;
+                        await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const BackupRestoreDialog(),
+                        );
+                      },
+                      icon: const Icon(Icons.restore_page),
+                      label: const Text('Testar Herança de Dados Antigos'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   void dispose() {
     _timerOnibus?.cancel();
+    RemoteMessagingService.inAppBannerNotifier.removeListener(
+      _onRemoteBannerChanged,
+    );
     super.dispose();
   }
 
@@ -240,12 +432,23 @@ class _HomeContentState extends State<HomeContent> {
     final proximaAula = ClassesData.obterProximaAula();
     final proximaProva = ProvasData.obterProximaProva();
     final moodHoje = MoodData.getMoodHoje();
+    final hoje = DateTime.now();
+    final eFimDeSemana =
+        hoje.weekday == DateTime.saturday || hoje.weekday == DateTime.sunday;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Início'),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
+        actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Teste Rasputin (Debug)',
+              icon: const Icon(Icons.bug_report),
+              onPressed: _abrirPainelTesteRasputin,
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -254,6 +457,91 @@ class _HomeContentState extends State<HomeContent> {
           children: [
             // Widget de jumpscare do Rasputin
             const BrilhoNoturnoWidget(),
+
+            if (_remoteBanner != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400, width: 1.2),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Imagem ou ícone
+                    if (_remoteBanner!.imageUrl != null && _remoteBanner!.imageUrl!.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Image.network(
+                            _remoteBanner!.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.amber.shade200,
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.amber.shade800,
+                                ),
+                              );
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                color: Colors.amber.shade200,
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        Colors.amber.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(Icons.campaign, color: Colors.amber.shade800),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _remoteBanner!.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _remoteBanner!.body,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Dispensar aviso',
+                      onPressed: _dispensarBannerRemoto,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             
             // Header com foto e saudação
             Row(
@@ -311,10 +599,10 @@ class _HomeContentState extends State<HomeContent> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: moodHoje.mood.cor.withOpacity(0.2),
+                      color: moodHoje.mood.cor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: moodHoje.mood.cor.withOpacity(0.5),
+                        color: moodHoje.mood.cor.withValues(alpha: 0.5),
                         width: 2,
                       ),
                     ),
@@ -350,7 +638,29 @@ class _HomeContentState extends State<HomeContent> {
             ),
             const SizedBox(height: 12),
             
-            if (proximaAula != null)
+            if (eFimDeSemana)
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.beach_access, color: Colors.orange),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Sem aula hoje, pode descansar! 🌴 😎 👍',
+                          style: TextStyle(color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (proximaAula != null)
               Card(
                 elevation: 2,
                 color: proximaAula.cor ?? Colors.white,
@@ -358,7 +668,7 @@ class _HomeContentState extends State<HomeContent> {
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
                     color: proximaAula.cor != null 
-                        ? (proximaAula.cor!).withOpacity(0.5) 
+                        ? (proximaAula.cor!).withValues(alpha: 0.5) 
                         : Colors.grey[300]!,
                     width: 2,
                   ),
@@ -465,7 +775,7 @@ class _HomeContentState extends State<HomeContent> {
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
                     color: proximaProva.cor != null 
-                        ? (proximaProva.cor!).withOpacity(0.5) 
+                        ? (proximaProva.cor!).withValues(alpha: 0.5) 
                         : Colors.grey[300]!,
                     width: 2,
                   ),
@@ -662,7 +972,7 @@ class _HomeContentState extends State<HomeContent> {
               },
               child: Card(
                 elevation: 2,
-                color: _proximoOnibus?.cor.withOpacity(0.1) ?? Colors.white,
+                color: _proximoOnibus?.cor.withValues(alpha: 0.1) ?? Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(
